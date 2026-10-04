@@ -3,7 +3,7 @@ name: gorute
 x-otp: &otp
   image: opentripplanner/opentripplanner:2.10.0
   environment:
-    JAVA_TOOL_OPTIONS: -Xmx${OTP_MEMORY:-6g}
+    JAVA_TOOL_OPTIONS: -Xmx${OTP_MEMORY:-3g}
   volumes:
     - ./otp:/var/opentripplanner
 

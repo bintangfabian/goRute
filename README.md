@@ -57,10 +57,12 @@ Tanpa OTP, app tetap jalan dan menampilkan status "Routing engine belum jalan".
 
 ```bash
 make fetch-gtfs   # GTFS TransJakarta → data/raw
-make fetch-osm    # OSM Jawa (~900 MB) → dipotong ke Jabodetabek
-make otp-build    # build graph (butuh RAM Docker ≥ 8 GB)
+make fetch-osm    # OSM Jawa (~900 MB) → dipotong & difilter ke Jabodetabek (~50 MB)
+make otp-build    # build graph (~2–3 menit)
 make otp-up       # OTP di http://localhost:8081
 ```
+
+OTP memakai heap 3 GB (`OTP_MEMORY` di `.env`) dan butuh sekitar 2,2 GB saat melayani, jadi Docker Desktop perlu jatah RAM minimal 4 GB. File `data/raw/java-latest.osm.pbf` hanya dipakai ulang oleh `fetch-osm` dan boleh dihapus kalau disk penuh.
 
 ### Mengubah API
 
@@ -81,7 +83,7 @@ make otp-up       # OTP di http://localhost:8081
 ## Roadmap
 
 - [x] Struktur repo, API status, PWA shell dengan peta
-- [ ] OTP jalan dengan GTFS TransJakarta + OSM
+- [x] OTP jalan dengan GTFS TransJakarta + OSM
 - [ ] Scraper KRL → GTFS
 - [ ] GTFS manual MRT, LRT Jakarta, LRT Jabodebek + titik transfer antar moda
 - [ ] Endpoint `/api/v1/plan` + modul tarif (KRL per km, JakLingko maks Rp10.000/180 menit, LRT Jabodebek)
