@@ -1,0 +1,9 @@
+# Data unduhan & hasil build: besar dan bisa dibuat ulang
+data/raw/*
+!data/raw/.gitkeep
+otp/*.zip
+otp/*.pbf
+otp/*.obj
+
+.env
+.DS_Store

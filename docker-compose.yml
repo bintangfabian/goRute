@@ -1,0 +1,41 @@
+name: gorute
+
+x-otp: &otp
+  image: opentripplanner/opentripplanner:2.10.0
+  environment:
+    JAVA_TOOL_OPTIONS: -Xmx${OTP_MEMORY:-6g}
+  volumes:
+    - ./otp:/var/opentripplanner
+
+services:
+  db:
+    image: postgis/postgis:18-3.6
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gorute}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gorute}
+      POSTGRES_DB: ${POSTGRES_DB:-gorute}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Serves the graph produced by otp-build (otp/graph.obj).
+  otp:
+    <<: *otp
+    command: ["--load", "--serve"]
+    ports:
+      - "8081:8080"
+
+  # One-off job: builds otp/graph.obj from the GTFS + OSM files in otp/.
+  otp-build:
+    <<: *otp
+    command: ["--build", "--save"]
+    profiles: ["build"]
+
+volumes:
+  pgdata:

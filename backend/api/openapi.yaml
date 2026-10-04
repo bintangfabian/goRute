@@ -1,0 +1,56 @@
+openapi: 3.1.0
+info:
+  title: goRute API
+  version: 0.1.0
+  description: |
+    API backend goRute. File ini adalah kontrak antara backend Go dan web app.
+    Setelah mengubahnya, jalankan `make gen-api` untuk memperbarui tipe TypeScript.
+paths:
+  /healthz:
+    get:
+      operationId: getHealthz
+      summary: Liveness check
+      responses:
+        "200":
+          description: API hidup
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+  /api/v1/status:
+    get:
+      operationId: getStatus
+      summary: Status API dan OpenTripPlanner
+      responses:
+        "200":
+          description: Status layanan. Selalu 200 agar web app bisa menampilkan mode terbatas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+components:
+  schemas:
+    Status:
+      type: object
+      required: [api, otp]
+      properties:
+        api:
+          type: string
+          const: ok
+        otp:
+          type: object
+          required: [reachable, feeds]
+          properties:
+            reachable:
+              type: boolean
+              description: Apakah OpenTripPlanner bisa dihubungi.
+            feeds:
+              type: array
+              description: ID feed GTFS yang dimuat OTP (misal TJ, KRL).
+              items:
+                type: string
