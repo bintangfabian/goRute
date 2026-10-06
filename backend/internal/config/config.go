@@ -8,12 +8,18 @@ type Config struct {
 	Addr string
 	// OTPURL is the base URL of the OpenTripPlanner instance.
 	OTPURL string
+	// OTPDir is the OTP data directory; fares are read from its GTFS feeds.
+	OTPDir string
+	// PhotonURL is the base URL of the Photon geocoder.
+	PhotonURL string
 }
 
 func Load() Config {
 	return Config{
-		Addr:   getenv("GORUTE_ADDR", ":8080"),
-		OTPURL: getenv("GORUTE_OTP_URL", "http://localhost:8081"),
+		Addr:      getenv("GORUTE_ADDR", ":8080"),
+		OTPURL:    getenv("GORUTE_OTP_URL", "http://localhost:8081"),
+		OTPDir:    getenv("GORUTE_OTP_DIR", "../otp"),
+		PhotonURL: getenv("GORUTE_PHOTON_URL", "https://photon.komoot.io"),
 	}
 }
 

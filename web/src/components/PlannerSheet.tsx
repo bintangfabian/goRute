@@ -1,74 +1,121 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { useState } from 'react'
+import type { Ref } from 'react'
+import type { PlanState } from '../hooks/usePlan'
+import { PREFERENCES, type Endpoint, type Preference } from '../lib/trip'
+import { MapAttribution } from './map/MapView'
+import { SwapIcon } from './icons'
+import { ItineraryList } from './ItineraryList'
+import { PlaceField } from './PlaceField'
+import { PreferenceTabs } from './PreferenceTabs'
 
-const PREFERENCES = [
-  { id: 'tercepat', label: 'Tercepat', hint: 'Waktu tempuh paling singkat' },
-  { id: 'termurah', label: 'Termurah', hint: 'Ongkos paling hemat, termasuk tarif integrasi' },
-  { id: 'termudah', label: 'Termudah', hint: 'Transit dan jalan kaki paling sedikit' },
-] as const
+type Props = {
+  ref?: Ref<HTMLElement>
+  origin: Endpoint | null
+  destination: Endpoint | null
+  onOriginChange: (value: Endpoint | null) => void
+  onDestinationChange: (value: Endpoint | null) => void
+  preference: Preference
+  onPreferenceChange: (value: Preference) => void
+  plan: PlanState
+  selectedId: string | null
+  onSelect: (id: string) => void
+}
 
-type Preference = (typeof PREFERENCES)[number]['id']
-
-export function PlannerSheet() {
-  const [destination, setDestination] = useState('')
-  const [preference, setPreference] = useState<Preference>('tercepat')
+export function PlannerSheet(props: Props) {
+  const { ref, origin, destination, preference } = props
   const hint = PREFERENCES.find((p) => p.id === preference)!.hint
 
   return (
     <motion.section
+      ref={ref}
       initial={{ y: '100%' }}
       animate={{ y: 0 }}
       transition={{ type: 'spring', stiffness: 260, damping: 30, delay: 0.2 }}
-      className="absolute inset-x-0 bottom-0 mx-auto max-w-lg rounded-t-3xl bg-white px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-[0_-8px_30px_rgb(0,0,0,0.12)]"
+      className="absolute inset-x-0 bottom-0 z-10 mx-auto flex max-h-[62dvh] max-w-lg flex-col rounded-t-3xl bg-white shadow-[0_-8px_30px_rgb(0,0,0,0.12)]"
     >
-      <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200" />
+      <div className="px-5 pt-3">
+        <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200" />
 
-      <label className="flex items-center gap-3 rounded-2xl bg-slate-100 px-4 py-3 focus-within:ring-2 focus-within:ring-brand">
-        <span className="size-2.5 shrink-0 rounded-full bg-accent" />
-        <input
-          value={destination}
-          onChange={(e) => setDestination(e.target.value)}
-          placeholder="Mau ke mana?"
-          className="w-full bg-transparent text-base outline-none placeholder:text-slate-400"
-        />
-      </label>
-
-      <div className="mt-4 grid grid-cols-3 rounded-2xl bg-slate-100 p-1">
-        {PREFERENCES.map((p) => (
-          <button
-            key={p.id}
+        <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <PlaceField kind="origin" value={origin} onChange={props.onOriginChange} placeholder="Dari mana?" />
+            <PlaceField
+              kind="destination"
+              value={destination}
+              onChange={props.onDestinationChange}
+              placeholder="Mau ke mana?"
+            />
+          </div>
+          <motion.button
             type="button"
-            onClick={() => setPreference(p.id)}
-            className="relative rounded-xl py-2 text-sm font-semibold"
+            whileTap={{ rotate: 180, scale: 0.9 }}
+            onClick={() => {
+              props.onOriginChange(destination)
+              props.onDestinationChange(origin)
+            }}
+            disabled={!origin && !destination}
+            aria-label="Tukar asal dan tujuan"
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600 disabled:opacity-40"
           >
-            {preference === p.id && (
-              <motion.span
-                layoutId="preference-highlight"
-                className="absolute inset-0 rounded-xl bg-brand"
-                transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-              />
-            )}
-            <span
-              className={`relative transition-colors ${preference === p.id ? 'text-white' : 'text-slate-600'}`}
-            >
-              {p.label}
-            </span>
-          </button>
-        ))}
+            <SwapIcon className="size-5" />
+          </motion.button>
+        </div>
+
+        <div className="mt-3">
+          <PreferenceTabs value={preference} onChange={props.onPreferenceChange} />
+        </div>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.p
+            key={hint}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="mt-2 text-center text-xs text-slate-500"
+          >
+            {hint}
+          </motion.p>
+        </AnimatePresence>
       </div>
 
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.p
-          key={hint}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.15 }}
-          className="mt-3 text-center text-xs text-slate-500"
-        >
-          {hint}
-        </motion.p>
-      </AnimatePresence>
+      <div className="mt-3 min-h-0 flex-1 overflow-y-auto px-5 pb-3">
+        <Results {...props} />
+      </div>
+      <footer className="border-t border-slate-100 px-5 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <MapAttribution />
+      </footer>
     </motion.section>
+  )
+}
+
+function Results({ plan, preference, selectedId, onSelect }: Props) {
+  switch (plan.kind) {
+    case 'idle':
+      return <Message>Cari tempat, atau ketuk peta untuk memilih tujuan.</Message>
+    case 'loading':
+      return (
+        <div className="flex flex-col gap-2.5">
+          {[0, 1].map((i) => (
+            <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-100" />
+          ))}
+        </div>
+      )
+    case 'error':
+      return <Message tone="error">{plan.message}</Message>
+    case 'ready':
+      if (plan.plan.itineraries.length === 0) {
+        return (
+          <Message>
+            Belum ada rute yang cocok. Saat ini data baru mencakup TransJakarta; KRL, MRT, dan LRT sedang disiapkan.
+          </Message>
+        )
+      }
+      return <ItineraryList plan={plan.plan} preference={preference} selectedId={selectedId} onSelect={onSelect} />
+  }
+}
+
+function Message({ children, tone }: { children: string; tone?: 'error' }) {
+  return (
+    <p className={`py-4 text-center text-sm ${tone === 'error' ? 'text-red-600' : 'text-slate-500'}`}>{children}</p>
   )
 }

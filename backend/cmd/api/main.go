@@ -12,8 +12,11 @@ import (
 	"time"
 
 	"github.com/bintangfabian/goRute/internal/config"
+	"github.com/bintangfabian/goRute/internal/fare"
+	"github.com/bintangfabian/goRute/internal/geocode"
 	"github.com/bintangfabian/goRute/internal/httpapi"
 	"github.com/bintangfabian/goRute/internal/otp"
+	"github.com/bintangfabian/goRute/internal/planner"
 )
 
 func main() {
@@ -26,9 +29,23 @@ func main() {
 
 func run(logger *slog.Logger) error {
 	cfg := config.Load()
+
+	// Without fare data the API still plans trips; prices are just unknown.
+	fares, err := fare.LoadOTPDir(cfg.OTPDir)
+	if err != nil {
+		logger.Warn("fare data unavailable", "dir", cfg.OTPDir, "err", err)
+		fares = fare.NewTable()
+	}
+	logger.Info("fares loaded", "routes", fares.Len())
+
+	otpClient := otp.NewClient(cfg.OTPURL)
 	srv := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           httpapi.NewRouter(logger, otp.NewClient(cfg.OTPURL)),
+		Addr: cfg.Addr,
+		Handler: httpapi.NewRouter(logger, httpapi.Deps{
+			OTP:     otpClient,
+			Planner: planner.New(otpClient, fares),
+			Places:  geocode.NewPhoton(cfg.PhotonURL),
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

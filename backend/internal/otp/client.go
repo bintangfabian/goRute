@@ -33,7 +33,7 @@ func (c *Client) FeedIDs(ctx context.Context) ([]string, error) {
 			FeedID string `json:"feedId"`
 		} `json:"feeds"`
 	}
-	if err := c.query(ctx, `{ feeds { feedId } }`, &data); err != nil {
+	if err := c.query(ctx, `{ feeds { feedId } }`, nil, &data); err != nil {
 		return nil, err
 	}
 	ids := make([]string, 0, len(data.Feeds))
@@ -43,8 +43,8 @@ func (c *Client) FeedIDs(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
-func (c *Client) query(ctx context.Context, query string, out any) error {
-	body, err := json.Marshal(map[string]string{"query": query})
+func (c *Client) query(ctx context.Context, query string, vars map[string]any, out any) error {
+	body, err := json.Marshal(map[string]any{"query": query, "variables": vars})
 	if err != nil {
 		return err
 	}

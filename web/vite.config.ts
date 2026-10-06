@@ -44,6 +44,8 @@ export default defineConfig({
       },
     }),
   ],
+  // MapLibre's worker is an ES module that imports a shared chunk.
+  worker: { format: 'es' },
   build: {
     // maplibre-gl is ~1 MB by itself and already lands in its own chunk.
     chunkSizeWarningLimit: 1200,

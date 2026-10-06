@@ -64,6 +64,16 @@ make otp-up       # OTP di http://localhost:8081
 
 OTP memakai heap 3 GB (`OTP_MEMORY` di `.env`) dan butuh sekitar 2,2 GB saat melayani, jadi Docker Desktop perlu jatah RAM minimal 4 GB. File `data/raw/java-latest.osm.pbf` hanya dipakai ulang oleh `fetch-osm` dan boleh dihapus kalau disk penuh.
 
+### Endpoint API
+
+| Endpoint | Fungsi |
+|---|---|
+| `GET /api/v1/status` | Status API dan OTP, termasuk feed yang dimuat |
+| `GET /api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]` | Opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi |
+| `GET /api/v1/places?q=` | Cari tempat di Jabodetabek (diteruskan ke [Photon](https://photon.komoot.io)) |
+
+Tarif dihitung di `backend/internal/fare` dari data GTFS yang sama dengan yang dipakai OTP (`otp/build-config.json`), ditambah aturan yang tidak bisa dinyatakan di GTFS (misal tarif TransJakarta Rp2.000 pukul 05.00–07.00).
+
 ### Mengubah API
 
 1. Ubah `backend/api/openapi.yaml`.
@@ -79,6 +89,7 @@ OTP memakai heap 3 GB (`OTP_MEMORY` di `.env`) dan butuh sekitar 2,2 GB saat mel
 | MRT Jakarta, LRT Jakarta, LRT Jabodebek | GTFS manual di `data/manual/` | ⏳ Belum |
 | Jalan kaki / jalan raya | OpenStreetMap (Geofabrik) | ✅ `make fetch-osm` |
 | Ojol / taksi | Estimasi dari jarak + regulasi tarif | ⏳ Belum |
+| Pencarian tempat | Photon publik (komoot) berbasis OSM | ✅ Untuk pengembangan |
 
 ## Roadmap
 
@@ -86,6 +97,8 @@ OTP memakai heap 3 GB (`OTP_MEMORY` di `.env`) dan butuh sekitar 2,2 GB saat mel
 - [x] OTP jalan dengan GTFS TransJakarta + OSM
 - [ ] Scraper KRL → GTFS
 - [ ] GTFS manual MRT, LRT Jakarta, LRT Jabodebek + titik transfer antar moda
-- [ ] Endpoint `/api/v1/plan` + modul tarif (KRL per km, JakLingko maks Rp10.000/180 menit, LRT Jabodebek)
-- [ ] Pengurutan opsi tercepat / termurah / termudah
-- [ ] UI hasil rute + animasi garis rute di peta
+- [x] Endpoint `/api/v1/plan` + modul tarif TransJakarta (transfer 3 jam, tarif pagi, Mikrotrans gratis, Royaltrans)
+- [x] Pengurutan opsi tercepat / termurah / termudah
+- [x] Pencarian tempat, UI hasil rute + animasi garis rute di peta
+- [ ] Tarif KRL (per km), MRT, LRT, dan integrasi JakLingko (maks Rp10.000/180 menit)
+- [ ] Photon self-hosted (instance publik hanya untuk pengembangan)

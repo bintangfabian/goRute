@@ -31,7 +31,7 @@ func TestStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), tt.otp)
+			router := NewRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), Deps{OTP: tt.otp})
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/status", nil))
 
