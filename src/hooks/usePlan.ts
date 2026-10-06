@@ -31,7 +31,7 @@ export function usePlan(origin: Endpoint | null, destination: Endpoint | null, p
     const controller = new AbortController()
     const settle = (state: Settled) => setSettled({ origin, destination, picked, state })
     const now = Date.now()
-    const departure = picked ? wibTime(now, picked.day, picked.clock) : now
+    const departure = picked ? wibTime(picked.ymd, picked.clock) : now
     api
       .plan(
         {
