@@ -16,7 +16,7 @@ goRute/
 │   ├── fare.ts             # tarif (GTFS + aturan TransJakarta)
 │   ├── stops.ts            # pencarian halte dari timetable (instan, plus alias seperti Monas, GBK)
 │   └── geocode.ts          # pencarian tempat lewat Photon
-├── shared/                 # tipe API & area layanan, dipakai web dan server
+├── shared/                 # tipe API, area layanan & hitungan jam WIB, dipakai web dan server
 ├── src/                    # PWA: React + Vite + Tailwind + Motion + MapLibre
 ├── scripts/                # pipeline data: unduh GTFS, build timetable
 ├── data/
@@ -39,7 +39,7 @@ pnpm dev        # web + API di http://localhost:5173
 | Perintah | Fungsi |
 |---|---|
 | `pnpm dev` | Web app + API (Vite menjalankan `api/` seperti Vercel) |
-| `pnpm test` | Test backend & pipeline (`node --test`) |
+| `pnpm test` | Test backend, `shared/` & pipeline (`node --test`) |
 | `pnpm check` | Lint + test + typecheck + build |
 | `pnpm preview` | Coba hasil build produksi, termasuk service worker |
 | `pnpm data:fetch` | Unduh GTFS ke `data/raw/` |
@@ -67,7 +67,7 @@ Batas plan Hobby yang relevan: hanya untuk penggunaan non-komersial, 4 jam CPU a
 | Endpoint | Fungsi |
 |---|---|
 | `GET /api/v1/status` | Feed yang dimuat dan waktu build data |
-| `GET /api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]` | Opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi. `time` (RFC 3339) adalah jam berangkat; tanpa `time` dipakai jam server. Web app selalu mengirim jam HP, jadi label "Berangkat X lagi" dihitung dari jam yang sama dengan rutenya |
+| `GET /api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]` | Opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi. `time` (RFC 3339) adalah jam berangkat; tanpa `time` dipakai jam server. Web app selalu mengirim `time`: jam HP, atau jam berangkat yang dipilih user, jadi label di kartu dihitung dari jam yang sama dengan rutenya |
 | `GET /api/v1/stops?q=` | Cari halte dari timetable: instan, paham singkatan (St., Ps., Sbr.) dan alias (Monas, GBK); halte yang namanya dipakai di beberapa tempat diberi petunjuk "Dekat Halte X" |
 | `GET /api/v1/places?q=` | Cari tempat di Jabodetabek (diteruskan ke [Photon](https://photon.komoot.io)) |
 
@@ -86,7 +86,7 @@ Bentuk respons ada di `shared/api.ts`.
 
 ## Roadmap
 
-- [x] PWA dengan peta, pencarian tempat, kartu opsi, animasi garis rute
+- [x] PWA dengan peta, pencarian tempat, pilihan jam berangkat, kartu opsi, animasi garis rute
 - [x] Mesin rute RAPTOR di TypeScript + tarif TransJakarta, siap deploy ke Vercel
 - [ ] Update GTFS otomatis (GitHub Actions) lalu deploy ulang
 - [ ] Jalan kaki lewat jaringan jalan OSM

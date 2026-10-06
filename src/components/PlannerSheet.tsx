@@ -1,8 +1,9 @@
 import { AnimatePresence, motion } from 'motion/react'
 import type { Ref } from 'react'
 import type { PlanState } from '../hooks/usePlan'
-import { PREFERENCES, type Endpoint, type Preference } from '../lib/trip'
+import { PREFERENCES, type Endpoint, type PickedTime, type Preference } from '../lib/trip'
 import { MapAttribution } from './map/MapView'
+import { DeparturePicker } from './DeparturePicker'
 import { SwapIcon } from './icons'
 import { ItineraryList } from './ItineraryList'
 import { PlaceField } from './PlaceField'
@@ -14,6 +15,8 @@ type Props = {
   destination: Endpoint | null
   onOriginChange: (value: Endpoint | null) => void
   onDestinationChange: (value: Endpoint | null) => void
+  pickedTime: PickedTime | null
+  onPickedTimeChange: (value: PickedTime | null) => void
   preference: Preference
   onPreferenceChange: (value: Preference) => void
   plan: PlanState
@@ -59,6 +62,10 @@ export function PlannerSheet(props: Props) {
           >
             <SwapIcon className="size-5" />
           </motion.button>
+        </div>
+
+        <div className="mt-2">
+          <DeparturePicker value={props.pickedTime} onChange={props.onPickedTimeChange} />
         </div>
 
         <div className="mt-3">
@@ -120,6 +127,7 @@ function Results({ plan, origin, destination, preference, selectedId, onSelect }
         <ItineraryList
           plan={plan.plan}
           departure={plan.departure}
+          picked={plan.picked}
           preference={preference}
           selectedId={selectedId}
           onSelect={onSelect}

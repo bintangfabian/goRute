@@ -11,7 +11,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "oxlint",
-    "test": "node --disable-warning=ExperimentalWarning --test \"server/**/*.test.ts\" \"scripts/**/*.test.ts\"",
+    "test": "node --disable-warning=ExperimentalWarning --test \"server/**/*.test.ts\" \"shared/**/*.test.ts\" \"scripts/**/*.test.ts\"",
     "check": "pnpm lint && pnpm test && pnpm build",
     "data:fetch": "node --disable-warning=ExperimentalWarning scripts/fetch-gtfs.ts",
     "data:build": "node --disable-warning=ExperimentalWarning scripts/build-timetable.ts"

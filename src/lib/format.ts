@@ -4,7 +4,14 @@ const clock = new Intl.DateTimeFormat('id-ID', {
   timeZone: 'Asia/Jakarta',
 })
 
+const weekday = new Intl.DateTimeFormat('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' })
+
 export const formatClock = (iso: string) => clock.format(new Date(iso))
+
+/** The day of `iso`, `days` days after today, in a sentence: '' (today), besok, lusa, or the weekday. */
+export function formatDay(iso: string, days: number) {
+  return days === 0 ? '' : days === 1 ? 'besok' : days === 2 ? 'lusa' : weekday.format(new Date(iso))
+}
 
 export function formatDuration(sec: number) {
   const min = Math.max(1, Math.round(sec / 60))
