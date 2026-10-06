@@ -14,6 +14,7 @@ goRute/
 │   ├── planner/            # menjalankan pencarian, membentuk opsi, ranking
 │   ├── timetable/          # format & loader data/timetable.json
 │   ├── fare.ts             # tarif (GTFS + aturan TransJakarta)
+│   ├── stops.ts            # pencarian halte dari timetable (instan, plus alias seperti Monas, GBK)
 │   └── geocode.ts          # pencarian tempat lewat Photon
 ├── shared/                 # tipe API & area layanan, dipakai web dan server
 ├── src/                    # PWA: React + Vite + Tailwind + Motion + MapLibre
@@ -57,7 +58,7 @@ Batas plan Hobby yang relevan: hanya untuk penggunaan non-komersial, 4 jam CPU a
 
 - **Data.** `scripts/gtfs/build.ts` mengelompokkan perjalanan GTFS menjadi *pola* (rute + urutan halte + waktu tempuh yang sama), mengekspansi `frequencies.txt` menjadi jam keberangkatan, dan menempelkan halte ke `shapes.txt` untuk garis di peta.
 - **RAPTOR.** Putaran ke-*k* mencari waktu tiba paling awal di setiap halte dengan maksimal *k* kali naik, sehingga hasilnya himpunan Pareto antara waktu tiba dan jumlah transit.
-- **Pencarian.** Tiap permintaan menjalankan pencarian normal (jalan ≤1,2 km, transfer ≤500 m), pencarian "mudah" (jalan ≤600 m, transfer ≤200 m, maks 3 kali naik), dan pencarian ulang tanpa tiap rute dari opsi tercepat untuk memunculkan alternatif. Hasil yang sama digabung dan opsi yang jauh lebih lambat dari yang tercepat dibuang.
+- **Pencarian.** Tiap permintaan menjalankan pencarian normal (jalan ≤1,2 km, transfer ≤500 m), pencarian "mudah" (jalan ≤600 m, transfer ≤200 m, maks 3 kali naik), dan pencarian ulang tanpa tiap rute dari opsi tercepat untuk memunculkan alternatif. Hasil yang sama digabung, opsi yang jauh lebih lambat dari yang tercepat dibuang, begitu juga opsi yang kalah dari opsi lain di semua aspek (jam tiba, lama perjalanan, tarif, transit, jalan kaki).
 - **Jalan kaki.** Masih estimasi: jarak garis lurus × 1,3 dengan kecepatan 4,5 km/jam, dan digambar sebagai garis lurus putus-putus.
 - **Tarif.** Dari `fare_attributes`/`fare_rules` GTFS, ditambah aturan yang tidak bisa dinyatakan di GTFS (TransJakarta Rp2.000 pukul 05.00–07.00; satu tiket berlaku untuk transfer selama 3 jam).
 
@@ -67,6 +68,7 @@ Batas plan Hobby yang relevan: hanya untuk penggunaan non-komersial, 4 jam CPU a
 |---|---|
 | `GET /api/v1/status` | Feed yang dimuat dan waktu build data |
 | `GET /api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]` | Opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi |
+| `GET /api/v1/stops?q=` | Cari halte dari timetable: instan, paham singkatan (St., Ps., Sbr.) dan alias (Monas, GBK) |
 | `GET /api/v1/places?q=` | Cari tempat di Jabodetabek (diteruskan ke [Photon](https://photon.komoot.io)) |
 
 Bentuk respons ada di `shared/api.ts`.
@@ -80,7 +82,7 @@ Bentuk respons ada di `shared/api.ts`.
 | MRT Jakarta, LRT Jakarta, LRT Jabodebek | GTFS manual di `data/manual/` | ⏳ Belum |
 | Jalan kaki | OpenStreetMap | ⏳ Masih estimasi garis lurus |
 | Ojol / taksi | Estimasi dari jarak + regulasi tarif | ⏳ Belum |
-| Pencarian tempat | Photon publik (komoot) berbasis OSM | ✅ Untuk pengembangan |
+| Pencarian tempat | Halte dari timetable (selalu jalan) + Photon publik (komoot) berbasis OSM | ✅ Photon publik untuk pengembangan; sering lambat (>8 detik) |
 
 ## Roadmap
 

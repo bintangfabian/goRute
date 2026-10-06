@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useRef, useState, type ReactNode } from 'react'
 import { usePlaceSearch } from '../hooks/usePlaceSearch'
 import { inServiceArea, type Endpoint } from '../lib/trip'
-import { CloseIcon, LocateIcon, PinIcon } from './icons'
+import { BusIcon, CloseIcon, LocateIcon, PinIcon } from './icons'
 
 type Props = {
   value: Endpoint | null
@@ -108,7 +108,13 @@ export function PlaceField({ value, onChange, placeholder, kind }: Props) {
             {search.places.map((p) => (
               <Suggestion
                 key={p.id}
-                icon={<PinIcon className="size-4 text-slate-400" />}
+                icon={
+                  p.kind === 'stop' ? (
+                    <BusIcon className="size-4 text-brand" />
+                  ) : (
+                    <PinIcon className="size-4 text-slate-400" />
+                  )
+                }
                 title={p.name}
                 subtitle={p.address}
                 onSelect={() => choose({ name: p.name, lat: p.lat, lon: p.lon })}

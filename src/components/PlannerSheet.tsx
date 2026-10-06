@@ -88,10 +88,16 @@ export function PlannerSheet(props: Props) {
   )
 }
 
-function Results({ plan, preference, selectedId, onSelect }: Props) {
+function Results({ plan, origin, destination, preference, selectedId, onSelect }: Props) {
   switch (plan.kind) {
     case 'idle':
-      return <Message>Cari tempat, atau ketuk peta untuk memilih tujuan.</Message>
+      return (
+        <Message>
+          {destination && !origin
+            ? 'Tentukan titik awal: cari tempat, pilih Lokasi saya, atau ketuk peta.'
+            : 'Cari tempat, atau ketuk peta untuk memilih tujuan.'}
+        </Message>
+      )
     case 'loading':
       return (
         <div className="flex flex-col gap-2.5">

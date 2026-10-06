@@ -27,4 +27,5 @@ export const api = {
   status: (signal?: AbortSignal) => get<Status>('/api/v1/status', {}, signal),
   plan: (query: PlanQuery, signal?: AbortSignal) => get<Plan>('/api/v1/plan', query, signal),
   places: (q: string, signal?: AbortSignal) => get<{ places: PlaceResult[] }>('/api/v1/places', { q }, signal),
+  stops: (q: string, signal?: AbortSignal) => get<{ places: PlaceResult[] }>('/api/v1/stops', { q }, signal),
 }

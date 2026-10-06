@@ -53,6 +53,7 @@ export function toPlaces(fc: FeatureCollection): PlaceResult[] {
     seen.add(key)
     places.push({
       id: `${p.osm_type ?? ''}${p.osm_id ?? places.length}`,
+      kind: 'place',
       name: p.name,
       address: address(p.name, [p.street, p.district, p.city, p.county, p.state]),
       lat,
