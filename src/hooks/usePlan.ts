@@ -6,9 +6,10 @@ export type PlanState =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'ready'; plan: Plan }
+  // departure is when the trip was planned from, in epoch ms: the server plans from the moment it is asked.
+  | { kind: 'ready'; plan: Plan; departure: number }
 
-type Settled = { kind: 'error'; message: string } | { kind: 'ready'; plan: Plan }
+type Settled = { kind: 'error'; message: string } | { kind: 'ready'; plan: Plan; departure: number }
 
 export function usePlan(origin: Endpoint | null, destination: Endpoint | null): PlanState {
   // The settled result remembers which request it answers, so a stale
@@ -19,6 +20,7 @@ export function usePlan(origin: Endpoint | null, destination: Endpoint | null): 
     if (!origin || !destination) return
     const controller = new AbortController()
     const settle = (state: Settled) => setSettled({ origin, destination, state })
+    const departure = Date.now()
     api
       .plan(
         {
@@ -32,7 +34,7 @@ export function usePlan(origin: Endpoint | null, destination: Endpoint | null): 
         controller.signal,
       )
       .then(({ data, error }) => {
-        settle(data ? { kind: 'ready', plan: data } : { kind: 'error', message: error })
+        settle(data ? { kind: 'ready', plan: data, departure } : { kind: 'error', message: error })
       })
       .catch(() => {
         if (!controller.signal.aborted) settle({ kind: 'error', message: 'Server tidak bisa dihubungi.' })

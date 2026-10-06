@@ -116,7 +116,15 @@ function Results({ plan, origin, destination, preference, selectedId, onSelect }
           </Message>
         )
       }
-      return <ItineraryList plan={plan.plan} preference={preference} selectedId={selectedId} onSelect={onSelect} />
+      return (
+        <ItineraryList
+          plan={plan.plan}
+          departure={plan.departure}
+          preference={preference}
+          selectedId={selectedId}
+          onSelect={onSelect}
+        />
+      )
   }
 }
 
