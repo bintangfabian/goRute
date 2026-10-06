@@ -14,6 +14,7 @@ goRute/
 │   ├── planner/            # menjalankan pencarian, membentuk opsi, ranking
 │   ├── timetable/          # format & loader data/timetable.json
 │   ├── fare.ts             # tarif (GTFS + aturan TransJakarta)
+│   ├── stops.ts            # pencarian halte dari timetable (instan, plus alias seperti Monas, GBK)
 │   └── geocode.ts          # pencarian tempat lewat Photon
 ├── shared/                 # tipe API & area layanan, dipakai web dan server
 ├── src/                    # PWA: React + Vite + Tailwind + Motion + MapLibre
@@ -67,6 +68,7 @@ Batas plan Hobby yang relevan: hanya untuk penggunaan non-komersial, 4 jam CPU a
 |---|---|
 | `GET /api/v1/status` | Feed yang dimuat dan waktu build data |
 | `GET /api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]` | Opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi |
+| `GET /api/v1/stops?q=` | Cari halte dari timetable: instan, paham singkatan (St., Ps., Sbr.) dan alias (Monas, GBK) |
 | `GET /api/v1/places?q=` | Cari tempat di Jabodetabek (diteruskan ke [Photon](https://photon.komoot.io)) |
 
 Bentuk respons ada di `shared/api.ts`.
@@ -80,7 +82,7 @@ Bentuk respons ada di `shared/api.ts`.
 | MRT Jakarta, LRT Jakarta, LRT Jabodebek | GTFS manual di `data/manual/` | ⏳ Belum |
 | Jalan kaki | OpenStreetMap | ⏳ Masih estimasi garis lurus |
 | Ojol / taksi | Estimasi dari jarak + regulasi tarif | ⏳ Belum |
-| Pencarian tempat | Photon publik (komoot) berbasis OSM | ✅ Untuk pengembangan |
+| Pencarian tempat | Halte dari timetable (selalu jalan) + Photon publik (komoot) berbasis OSM | ✅ Photon publik untuk pengembangan; sering lambat (>8 detik) |
 
 ## Roadmap
 

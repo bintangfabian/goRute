@@ -60,6 +60,11 @@ export type Route = {
   agency: string
 }
 
-export type PlaceResult = Place & { id: string; address: string }
+export type PlaceResult = Place & {
+  id: string
+  /** A halte from the timetable, or a place from the geocoder. */
+  kind: 'stop' | 'place'
+  address: string
+}
 
 export type ApiError = { error: string }
