@@ -5,7 +5,6 @@ import { MapView } from './components/map/MapView'
 import { RouteLine } from './components/map/RouteLine'
 import { PlannerSheet } from './components/PlannerSheet'
 import { StatusPill } from './components/StatusPill'
-import { useElementHeight } from './hooks/useElementHeight'
 import { usePlan } from './hooks/usePlan'
 import { useServiceStatus } from './hooks/useServiceStatus'
 import type { Plan } from './lib/api/client'
@@ -20,7 +19,6 @@ export default function App() {
   const [chosen, setChosen] = useState<{ plan: Plan; id: string } | null>(null)
   const plan = usePlan(origin, destination)
   const sheetRef = useRef<HTMLElement>(null)
-  const sheetHeight = useElementHeight(sheetRef)
 
   const ready = plan.kind === 'ready' ? plan.plan : null
   const selectedId = ready ? (chosen?.plan === ready ? chosen.id : (ready.ranking[preference][0] ?? null)) : null
@@ -28,10 +26,13 @@ export default function App() {
 
   return (
     <main className="relative h-dvh w-full overflow-hidden">
-      <MapView onPick={setDestination}>
+      <MapView
+        // A tap picks the destination, or the origin when only that is missing.
+        onPick={(point) => (destination && !origin ? setOrigin(point) : setDestination(point))}
+      >
         {selected && <RouteLine itinerary={selected} />}
         <EndpointMarkers origin={origin} destination={destination} />
-        <CameraFollow origin={origin} destination={destination} itinerary={selected} bottomInset={sheetHeight} />
+        <CameraFollow origin={origin} destination={destination} itinerary={selected} sheet={sheetRef} />
       </MapView>
       <StatusPill state={status} />
       <PlannerSheet

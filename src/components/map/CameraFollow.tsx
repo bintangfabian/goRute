@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, type RefObject } from 'react'
 import { useMap } from 'react-map-gl/maplibre'
 import type { Itinerary } from '../../lib/api/client'
 import type { Endpoint } from '../../lib/trip'
@@ -8,26 +8,24 @@ type Props = {
   origin: Endpoint | null
   destination: Endpoint | null
   itinerary: Itinerary | null
-  // Height of the bottom sheet covering the map, in pixels.
-  bottomInset: number
+  // The bottom sheet covering the map.
+  sheet: RefObject<HTMLElement | null>
 }
 
 // Moves the camera to whatever the user is looking at: the selected
 // route, otherwise the chosen endpoints.
-export function CameraFollow({ origin, destination, itinerary, bottomInset }: Props) {
+export function CameraFollow({ origin, destination, itinerary, sheet }: Props) {
   const { current: map } = useMap()
-  // Read through a ref: the sheet resizing (e.g. while typing) should not
-  // move the camera by itself.
-  const inset = useRef(bottomInset)
-  useEffect(() => {
-    inset.current = bottomInset
-  }, [bottomInset])
 
   useEffect(() => {
     if (!map) return
+    // Measure the sheet when moving rather than tracking its size: it grows
+    // in the very render that shows a new route, and the sheet resizing by
+    // itself (e.g. while typing) should not move the camera.
+    const inset = sheet.current?.offsetHeight ?? 0
     // Keep at least a strip of map visible even when the sheet is tall.
     const height = map.getContainer().clientHeight
-    const padding = { top: 72, left: 48, right: 48, bottom: Math.min(inset.current + 32, height - 72 - 160) }
+    const padding = { top: 72, left: 48, right: 48, bottom: Math.min(inset + 32, height - 72 - 160) }
     const points = [origin, destination].filter((p): p is Endpoint => p !== null)
     const bounds = itinerary ? routeBounds(itinerary.legs) : null
 
@@ -53,7 +51,7 @@ export function CameraFollow({ origin, destination, itinerary, bottomInset }: Pr
         duration: 900,
       })
     }
-  }, [map, origin, destination, itinerary])
+  }, [map, origin, destination, itinerary, sheet])
 
   return null
 }

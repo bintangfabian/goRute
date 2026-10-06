@@ -7,7 +7,7 @@ import { raptor, type Journey, type ServiceDay, type StopWalk } from '../router/
 import { addDays, wibDay } from '../time.ts'
 import type { Pattern, Timetable } from '../timetable/timetable.ts'
 import { walkMeters, walkSeconds } from '../walk.ts'
-import { rank } from './rank.ts'
+import { dominates, rank } from './rank.ts'
 
 export type PlanRequest = { from: Place; to: Place; departure: Date }
 
@@ -68,8 +68,10 @@ export function planTrip(tt: Timetable, req: PlanRequest): Plan {
   const fastestMs = Math.min(...options.map((o) => Date.parse(o.itinerary.end) - leaveMs))
   const limitMs = leaveMs + fastestMs * MAX_SLOWDOWN + SLOWDOWN_SLACK_SEC * 1000
   const itineraries = options
-    .filter((o) => Date.parse(o.itinerary.end) <= limitMs)
-    .map((o, i): Itinerary => ({ ...o.itinerary, id: `r${i + 1}` }))
+    .map((o) => o.itinerary)
+    .filter((it) => Date.parse(it.end) <= limitMs)
+    .filter((it, _, all) => !all.some((other) => dominates(other, it)))
+    .map((it, i): Itinerary => ({ ...it, id: `r${i + 1}` }))
   return { itineraries, ranking: rank(itineraries) }
 }
 

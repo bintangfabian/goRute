@@ -25,3 +25,23 @@ export const compareCheapest: Compare = (a, b) =>
 /** Fewest transfers, then least walking. */
 export const compareEasiest: Compare = (a, b) =>
   a.transfers - b.transfers || a.walkDistanceM - b.walkDistanceM || byArrival(a, b)
+
+type Trip = Omit<Itinerary, 'id'>
+
+/**
+ * True when `a` is no worse than `b` on arrival, travel time, fare,
+ * transfers, and walking, and better on at least one: then `b` is not worth
+ * showing, whichever preference the rider picks.
+ */
+export function dominates(a: Trip, b: Trip): boolean {
+  // An incomplete fare is only a lower bound, so it never proves `a` cheaper.
+  if (!a.fare.complete) return false
+  const gains = [
+    Date.parse(b.end) - Date.parse(a.end),
+    b.durationSec - a.durationSec,
+    b.fare.totalIdr - a.fare.totalIdr,
+    b.transfers - a.transfers,
+    b.walkDistanceM - a.walkDistanceM,
+  ]
+  return gains.every((g) => g >= 0) && gains.some((g) => g > 0)
+}
