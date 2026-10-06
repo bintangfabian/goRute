@@ -94,10 +94,20 @@ export function planTrip(tt: Timetable, req: PlanRequest): Plan {
   return { itineraries, ranking: rank(itineraries) }
 }
 
-/** Routes priced above the lowest paid fare, such as Royaltrans. */
-function premiumRoutes(tt: Timetable): Set<number> {
-  const regular = Math.min(...tt.fares.map((f) => f.price).filter((p) => p > 0))
-  return new Set(tt.routes.flatMap((r, i) => (r.fare >= 0 && tt.fares[r.fare].price > regular ? [i] : [])))
+/**
+ * Routes priced above the lowest paid fare of their own feed, such as
+ * Royaltrans in TransJakarta. Comparing within a feed keeps a cheaper fare
+ * in another feed (an MRT ride, say) from making every regular bus premium.
+ */
+export function premiumRoutes(tt: Timetable): Set<number> {
+  const feedOf = (id: string) => id.slice(0, id.indexOf(':'))
+  const regular = new Map<string, number>()
+  for (const f of tt.fares) {
+    if (f.price > 0) regular.set(feedOf(f.id), Math.min(regular.get(feedOf(f.id)) ?? Infinity, f.price))
+  }
+  return new Set(
+    tt.routes.flatMap((r, i) => (r.fare >= 0 && tt.fares[r.fare].price > (regular.get(feedOf(r.id)) ?? Infinity) ? [i] : [])),
+  )
 }
 
 function nearby(tt: Timetable, p: Place, s: Search): StopWalk[] {

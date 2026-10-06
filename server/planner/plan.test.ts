@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import type { Itinerary, Plan } from '../../shared/api.ts'
 import { STOPS, testTimetable } from '../testing/network.ts'
-import { planTrip } from './plan.ts'
+import { planTrip, premiumRoutes } from './plan.ts'
 
 const tt = testTimetable()
 
@@ -100,4 +100,30 @@ describe('planTrip', () => {
     })
     assert.deepEqual(p.itineraries, [])
   })
+})
+
+test('counts a route as premium only against fares of its own feed', () => {
+  // An MRT feed whose flat fare is below TransJakarta's regular Rp3.500.
+  const csv = (...lines: string[]) => lines.join('\n') + '\n'
+  const files = new Map([
+    ['agency.txt', csv('agency_id,agency_name,agency_url,agency_timezone', 'M,MRT,https://example.com,Asia/Jakarta')],
+    ['stops.txt', csv('stop_id,stop_name,stop_lat,stop_lon', 'P,Stasiun P,-6.21,106.8', 'Q,Stasiun Q,-6.22,106.8')],
+    ['routes.txt', csv('route_id,agency_id,route_short_name,route_long_name,route_desc,route_type', 'M1,M,M1,P - Q,MRT,1')],
+    [
+      'calendar.txt',
+      csv(
+        'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date',
+        'ALL,1,1,1,1,1,1,1,20260101,20271231',
+      ),
+    ],
+    ['trips.txt', csv('route_id,service_id,trip_id', 'M1,ALL,m1')],
+    [
+      'stop_times.txt',
+      csv('trip_id,arrival_time,departure_time,stop_id,stop_sequence', 'm1,05:00:00,05:00:00,P,1', 'm1,05:03:00,05:03:00,Q,2'),
+    ],
+    ['fare_attributes.txt', csv('fare_id,price,currency_type,payment_method,transfers,transfer_duration', 'MP,3000,IDR,0,0,')],
+    ['fare_rules.txt', csv('fare_id,route_id', 'MP,M1')],
+  ])
+  const both = testTimetable([{ id: 'MRT', name: 'MRT', files }])
+  assert.deepEqual([...premiumRoutes(both)].map((r) => both.routes[r].id).sort(), ['TJ:X', 'TJ:Y'])
 })

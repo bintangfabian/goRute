@@ -8,7 +8,7 @@
 // D→E is a walking transfer. Routes X and Y are pricey weekday-only
 // expresses; Y is a little slower.
 
-import { buildTimetable } from '../../scripts/gtfs/build.ts'
+import { buildTimetable, type FeedFiles } from '../../scripts/gtfs/build.ts'
 import { Timetable } from '../timetable/timetable.ts'
 
 const csv = (...lines: string[]) => lines.join('\n') + '\n'
@@ -87,9 +87,10 @@ const files = new Map([
   ['fare_rules.txt', csv('fare_id,route_id', 'FP,1', 'FP,2', 'PP,X', 'PP,Y')],
 ])
 
-export function testTimetable(): Timetable {
+/** The network above as feed "TJ", optionally with more feeds beside it. */
+export function testTimetable(extraFeeds: FeedFiles[] = []): Timetable {
   // The router's TransJakarta fare rules key off the "TJ" feed ID.
-  const { timetable, warnings } = buildTimetable([{ id: 'TJ', name: 'Test', files }], new Date('2026-10-01'))
+  const { timetable, warnings } = buildTimetable([{ id: 'TJ', name: 'Test', files }, ...extraFeeds], new Date('2026-10-01'))
   if (warnings.length > 0) throw new Error(warnings.join('\n'))
   return new Timetable(timetable)
 }
