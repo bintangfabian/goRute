@@ -20,6 +20,14 @@ test('accepts an RFC 3339 departure time', () => {
   assert.equal(req.departure.toISOString(), '2026-10-05T23:30:00.000Z')
 })
 
+test('accepts the departure time the web app sends', () => {
+  // usePlan sends new Date(departure).toISOString(): UTC with milliseconds.
+  const departure = Date.parse('2026-10-06T23:11:42.123+07:00')
+  const req = parse(`${trip}&${new URLSearchParams({ time: new Date(departure).toISOString() })}`)
+  assert.ok(!('error' in req))
+  assert.equal(req.departure.getTime(), departure)
+})
+
 test('rejects bad input with a readable message', () => {
   assert.deepEqual(parse('toLat=-6.19&toLon=106.82'), { error: 'Parameter fromLat dan fromLon wajib berupa angka.' })
   assert.deepEqual(parse('fromLat=-6.2&fromLon=abc&toLat=-6.19&toLon=106.82'), {

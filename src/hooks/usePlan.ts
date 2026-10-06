@@ -6,7 +6,8 @@ export type PlanState =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  // departure is when the trip was planned from, in epoch ms: the server plans from the moment it is asked.
+  // departure is when the trip was planned from, in epoch ms. It is sent as `time`, so the
+  // server and the cards count from the same clock even when the phone's clock is off.
   | { kind: 'ready'; plan: Plan; departure: number }
 
 type Settled = { kind: 'error'; message: string } | { kind: 'ready'; plan: Plan; departure: number }
@@ -30,6 +31,7 @@ export function usePlan(origin: Endpoint | null, destination: Endpoint | null): 
           toLat: destination.lat,
           toLon: destination.lon,
           toName: destination.name,
+          time: new Date(departure).toISOString(),
         },
         controller.signal,
       )

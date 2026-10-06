@@ -19,6 +19,8 @@ export type PlanQuery = {
   toLat: number
   toLon: number
   toName: string
+  /** RFC 3339. The server plans from this moment instead of its own clock. */
+  time: string
 }
 
 // The API is served from the same origin: Vercel Functions in production,
