@@ -8,16 +8,18 @@ import { StatusPill } from './components/StatusPill'
 import { usePlan } from './hooks/usePlan'
 import { useServiceStatus } from './hooks/useServiceStatus'
 import type { Plan } from './lib/api/client'
-import type { Endpoint, Preference } from './lib/trip'
+import type { Endpoint, PickedTime, Preference } from './lib/trip'
 
 export default function App() {
   const status = useServiceStatus()
   const [origin, setOrigin] = useState<Endpoint | null>(null)
   const [destination, setDestination] = useState<Endpoint | null>(null)
+  // Null plans from now.
+  const [pickedTime, setPickedTime] = useState<PickedTime | null>(null)
   const [preference, setPreference] = useState<Preference>('tercepat')
   // A tapped card only counts for the plan it was tapped in.
   const [chosen, setChosen] = useState<{ plan: Plan; id: string } | null>(null)
-  const plan = usePlan(origin, destination)
+  const plan = usePlan(origin, destination, pickedTime)
   const sheetRef = useRef<HTMLElement>(null)
 
   const ready = plan.kind === 'ready' ? plan.plan : null
@@ -41,6 +43,8 @@ export default function App() {
         destination={destination}
         onOriginChange={setOrigin}
         onDestinationChange={setDestination}
+        pickedTime={pickedTime}
+        onPickedTimeChange={setPickedTime}
         preference={preference}
         onPreferenceChange={(p) => {
           setPreference(p)
