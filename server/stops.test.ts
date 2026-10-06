@@ -22,6 +22,8 @@ const STOPS: [string, number, number, string[]][] = [
   ['SMAN 73', -6.3, 106.9, ['S']],
   ['SMAN 85', -6.25, 106.75, ['S']],
   ['Sbr. SMAN 85', -6.2503, 106.7503, ['S']], // across the road from SMAN 85
+  ['Masjid At Taqwa', -6.2845, 106.8445, ['9']], // next to Ps. Minggu
+  ['Masjid At Taqwa', -6.244, 106.801, ['1']], // another one, next to Blok M
 ]
 
 function timetable(): Timetable {
@@ -102,6 +104,13 @@ test('matches the start of words only', () => {
   assert.deepEqual(search('gamb'), ['St. Gambir'])
   assert.deepEqual(search('ambir'), [])
   assert.deepEqual(search('m'), [])
+})
+
+test('tells same-named haltes apart by a nearby BRT halte', () => {
+  assert.deepEqual(searchStops(tt, 'masjid at taqwa').map((p) => p.address).sort(), [
+    'Dekat Halte Blok M · 1',
+    'Dekat Halte Ps. Minggu · 9',
+  ])
 })
 
 test('describes a halte by the routes stopping there', () => {

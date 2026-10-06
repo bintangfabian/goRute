@@ -23,6 +23,16 @@ test('finds common places by the names people use', () => {
   assert.equal(names('blok m')[0], 'Blok M')
 })
 
+test('tells same-named haltes apart', () => {
+  // Cut Mutia's nearest BRT halte is the same for both, so it falls back to any halte.
+  for (const name of ['Masjid At Taqwa', 'Cipulir', 'Lapangan Banteng', 'Cut Mutia']) {
+    const same = searchStops(loadTimetable(), name).filter((p) => p.name === name)
+    const hints = same.map((p) => p.address.match(/^Dekat Halte (.+?) ·/)?.[1])
+    assert.ok(same.length > 1 && hints.every(Boolean), `${name}: ${same.map((p) => p.address).join(' / ')}`)
+    assert.equal(new Set(hints).size, hints.length, `${name}: ${hints.join(' / ')}`)
+  }
+})
+
 test('keeps the number when it names a different place', () => {
   assert.equal(names('sman 73')[0], 'SMAN 73')
   assert.equal(names('smkn 48')[0], 'SMKN 48')
