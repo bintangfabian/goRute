@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { buildTimetable } from '../scripts/gtfs/build.ts'
-import { placeName, searchStops, words } from './stops.ts'
+import { nameForms, placeName, searchStops, words } from './stops.ts'
 import { Timetable } from './timetable/timetable.ts'
 
 const csv = (...lines: string[]) => lines.join('\n') + '\n'
@@ -19,6 +19,9 @@ const STOPS: [string, number, number, string[]][] = [
   ['Ps. Minggu', -6.284, 106.844, ['9']],
   ['Ps. Minggu 2', -6.32, 106.85, ['9']], // another Pasar Minggu, 4 km away
   ['GBK Pintu 7', -6.2185, 106.8045, ['2']], // a gate number, not a platform
+  ['SMAN 73', -6.3, 106.9, ['S']],
+  ['SMAN 85', -6.25, 106.75, ['S']],
+  ['Sbr. SMAN 85', -6.2503, 106.7503, ['S']], // across the road from SMAN 85
 ]
 
 function timetable(): Timetable {
@@ -60,6 +63,10 @@ const tt = timetable()
 const search = (q: string) => searchStops(tt, q).map((p) => p.name)
 
 test('reduces stop names to the place they serve', () => {
+  assert.deepEqual(nameForms('Sbr. Monas 2'), ['Sbr. Monas 2', 'Monas 2', 'Monas'])
+  // Platforms are one digit; other numbers are part of the place's name.
+  assert.deepEqual(nameForms('Sbr. SMAN 85'), ['Sbr. SMAN 85', 'SMAN 85'])
+  assert.equal(placeName('SDN Lebak Bulus 01'), 'SDN Lebak Bulus 01')
   assert.equal(placeName('Sbr. St. Gambir 2'), 'St. Gambir')
   assert.equal(placeName('Blok M Jalur 3'), 'Blok M')
   assert.equal(placeName('Kebon Sirih Arah Selatan'), 'Kebon Sirih')
@@ -78,7 +85,17 @@ test('spells out abbreviations and merges platforms', () => {
   assert.deepEqual(search('stasiun gambir'), ['St. Gambir'])
   assert.deepEqual(search('st gambir'), ['St. Gambir'])
   assert.deepEqual(search('blok m'), ['Blok M'])
-  assert.deepEqual(search('pasar minggu'), ['Ps. Minggu', 'Ps. Minggu'])
+  // Far apart, so two places that each keep their own name.
+  assert.deepEqual(search('pasar minggu'), ['Ps. Minggu', 'Ps. Minggu 2'])
+})
+
+test('keeps numbers that tell places apart', () => {
+  assert.deepEqual(search('sman 73'), ['SMAN 73'])
+  assert.deepEqual(search('sman'), ['SMAN 73', 'SMAN 85'])
+})
+
+test('finds a merged halte by any of its stop names', () => {
+  assert.deepEqual(search('monas 2'), ['Monas'])
 })
 
 test('matches the start of words only', () => {

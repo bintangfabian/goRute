@@ -50,6 +50,8 @@ type Halte = {
   text: string
   /** The name without platform numbers and the like, which aliases point at. */
   base: string
+  /** Words of each stop name merged into it, so typing "Gambir 2" still finds "Gambir". */
+  stopWords: string[][]
   lat: number
   lon: number
   /** Routes serving any of its stops. */
@@ -80,11 +82,17 @@ export function searchStops(tt: Timetable, query: string): PlaceResult[] {
   }))
 }
 
-/** 0 for the whole name, 1 when the name starts with the query, 2 when every query word starts a word of the name. */
+/** The best match of the query against the halte's name or any of its stop names. */
 function matchScore(halte: Halte, q: string[], text: string): number {
-  if (halte.text === text) return 0
-  if (halte.text.startsWith(text)) return 1
-  return q.every((w) => halte.words.some((hw) => hw.startsWith(w))) ? 2 : Infinity
+  return Math.min(...[halte.words, ...halte.stopWords].map((name) => nameScore(name, q, text)))
+}
+
+/** 0 for the whole name, 1 when the name starts with the query, 2 when every query word starts a word of the name. */
+function nameScore(name: string[], q: string[], text: string): number {
+  const full = name.join(' ')
+  if (full === text) return 0
+  if (full.startsWith(text)) return 1
+  return q.every((w) => name.some((nw) => nw.startsWith(w))) ? 2 : Infinity
 }
 
 /** Haltes an alias points at, scored like matchScore. */
@@ -120,7 +128,7 @@ function describe(tt: Timetable, routes: number[]): string {
 export function words(s: string): string[] {
   return s
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter(Boolean)
@@ -128,16 +136,36 @@ export function words(s: string): string[] {
 }
 
 /**
- * The place a stop belongs to, without its platform, direction, or side of
- * the road: "Sbr. St. Gambir 2" and "Blok M Jalur 3" → "St. Gambir", "Blok M".
+ * A stop name from most to least specific, dropping the side of the road,
+ * then the direction or platform at the end, one at a time:
+ * "Sbr. Monas 2" → ["Sbr. Monas 2", "Monas 2", "Monas"]. Platforms are
+ * numbered 1 to 9; longer or zero-padded numbers name the place itself
+ * ("SMAN 85", "SDN Lebak Bulus 01") and stay.
  */
-export function placeName(stopName: string): string {
-  let name = stopName.trim().replace(/^Sbr\.\s+/i, '')
-  for (let prev = ''; prev !== name; ) {
-    prev = name
-    name = name.replace(/\s+(Arah \S+|Jalur \d+|\d+)$/i, '')
+export function nameForms(stopName: string): string[] {
+  const forms = [stopName.trim()]
+  const next = (s: string) => {
+    const unprefixed = s.replace(/^Sbr\.\s+/i, '')
+    return unprefixed !== s ? unprefixed : s.replace(/\s+(Arah \S+|Jalur \d+|[1-9])$/i, '')
   }
-  return name
+  for (let s = next(forms[0]); s !== forms.at(-1); s = next(s)) forms.push(s)
+  return forms
+}
+
+/** The least specific form of a stop name: "Sbr. St. Gambir 2" → "St. Gambir". */
+export function placeName(stopName: string): string {
+  return nameForms(stopName).at(-1)!
+}
+
+/**
+ * The most specific name every stop of one place shares: "Monas 1" and
+ * "Monas 2" → "Monas", "SMAN 85" and "Sbr. SMAN 85" → "SMAN 85".
+ */
+function sharedName(names: string[]): string {
+  const key = (s: string) => words(s).join(' ')
+  const others = names.slice(1).map((n) => new Set(nameForms(n).map(key)))
+  // The least specific form is what grouped the stops, so one always matches.
+  return nameForms(names[0]).find((form) => others.every((forms) => forms.has(key(form))))!
 }
 
 const cache = new WeakMap<Timetable, Halte[]>()
@@ -147,34 +175,28 @@ function haltes(tt: Timetable): Halte[] {
   const cached = cache.get(tt)
   if (cached) return cached
 
-  // Platform numbers and the like are dropped only where they tell stops of
-  // one place apart ("Monas 1", "Monas 2"); "GBK Pintu 7" keeps its gate.
-  const sources = new Map<string, Set<string>>()
-  for (const stopName of tt.stopName) {
-    const base = words(placeName(stopName)).join(' ')
-    let names = sources.get(base)
-    if (!names) sources.set(base, (names = new Set()))
-    names.add(stopName)
-  }
-
-  const groups = new Map<string, { name: string; anchor: number; stops: number[] }[]>()
+  // Group stops by base name within walking distance first: only then is it
+  // clear whether a number tells platforms apart ("Monas 1", "Monas 2") or
+  // places ("SMAN 73", "SMAN 85").
+  const groups = new Map<string, { anchor: number; stops: number[] }[]>()
   for (let s = 0; s < tt.stopCount; s++) {
-    const stripped = placeName(tt.stopName[s])
-    const name = sources.get(words(stripped).join(' '))!.size > 1 ? stripped : tt.stopName[s]
-    const text = words(name).join(' ')
-    if (!text) continue
-    let same = groups.get(text)
-    if (!same) groups.set(text, (same = []))
+    const base = words(placeName(tt.stopName[s])).join(' ')
+    if (!base) continue
+    let same = groups.get(base)
+    if (!same) groups.set(base, (same = []))
     const near = (g: { anchor: number }) =>
       distanceM(tt.stopLat[g.anchor], tt.stopLon[g.anchor], tt.stopLat[s], tt.stopLon[s]) < SAME_PLACE_M
     const group = same.find(near)
     if (group) group.stops.push(s)
-    else same.push({ name, anchor: s, stops: [s] })
+    else same.push({ anchor: s, stops: [s] })
   }
 
   const list: Halte[] = []
-  for (const [text, same] of groups) {
+  for (const [base, same] of groups) {
     for (const g of same) {
+      const stopNames = [...new Set(g.stops.map((s) => tt.stopName[s]))]
+      const name = sharedName(stopNames)
+      const text = words(name).join(' ')
       const routes = new Set<number>()
       for (const s of g.stops) {
         const serving = tt.stopPatterns[s]
@@ -183,10 +205,11 @@ function haltes(tt: Timetable): Halte[] {
       const mean = (values: Float64Array) => g.stops.reduce((sum, s) => sum + values[s], 0) / g.stops.length
       list.push({
         id: `halte${list.length}`,
-        name: g.name,
+        name,
         words: text.split(' '),
         text,
-        base: words(placeName(g.name)).join(' '),
+        base,
+        stopWords: stopNames.length > 1 ? stopNames.map(words) : [],
         lat: Math.round(mean(tt.stopLat) * 1e6) / 1e6,
         lon: Math.round(mean(tt.stopLon) * 1e6) / 1e6,
         routes: [...routes],
