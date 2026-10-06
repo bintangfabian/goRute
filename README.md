@@ -67,7 +67,7 @@ Batas plan Hobby yang relevan: hanya untuk penggunaan non-komersial, 4 jam CPU a
 | Endpoint | Fungsi |
 |---|---|
 | `GET /api/v1/status` | Feed yang dimuat dan waktu build data |
-| `GET /api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]` | Opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi |
+| `GET /api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]` | Opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi. `time` (RFC 3339) adalah jam berangkat; tanpa `time` dipakai jam server. Web app selalu mengirim jam HP, jadi label "Berangkat X lagi" dihitung dari jam yang sama dengan rutenya |
 | `GET /api/v1/stops?q=` | Cari halte dari timetable: instan, paham singkatan (St., Ps., Sbr.) dan alias (Monas, GBK); halte yang namanya dipakai di beberapa tempat diberi petunjuk "Dekat Halte X" |
 | `GET /api/v1/places?q=` | Cari tempat di Jabodetabek (diteruskan ke [Photon](https://photon.komoot.io)) |
 
