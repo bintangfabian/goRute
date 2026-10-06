@@ -3,6 +3,7 @@
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { distanceM } from './geo.ts'
 import { ALIASES, placeName, searchStops } from './stops.ts'
 import { loadTimetable } from './timetable/timetable.ts'
 
@@ -21,6 +22,22 @@ test('finds common places by the names people use', () => {
   assert.equal(names('Monas')[0], 'Monumen Nasional')
   assert.equal(names('stasiun sudirman')[0], 'St. Sudirman 2')
   assert.equal(names('blok m')[0], 'Blok M')
+})
+
+test('tells same-named haltes apart by a halte that is really near', () => {
+  const tt = loadTimetable()
+  // Masjid At Taqwa and Jln. Kb. Nanas once got a BRT halte 7–9 km away.
+  for (const name of ['Masjid At Taqwa', 'Cipulir', 'Lapangan Banteng', 'Cut Mutia', 'Jln. Kb. Nanas']) {
+    const same = searchStops(tt, name).filter((p) => p.name === name)
+    const hints = same.map((p) => p.address.match(/^Dekat Halte (.+?) ·/)?.[1] ?? '')
+    assert.ok(same.length > 1 && hints.every(Boolean), `${name}: ${same.map((p) => p.address).join(' / ')}`)
+    assert.equal(new Set(hints).size, hints.length, `${name}: ${hints.join(' / ')}`)
+    same.forEach((p, i) => {
+      const hinted = searchStops(tt, hints[i]).find((q) => placeName(q.name) === hints[i])!
+      const m = distanceM(p.lat, p.lon, hinted.lat, hinted.lon)
+      assert.ok(m < 1600, `${name} → ${hints[i]}: ${Math.round(m)} m`)
+    })
+  }
 })
 
 test('keeps the number when it names a different place', () => {

@@ -8,6 +8,8 @@ import type { Timetable } from './timetable/timetable.ts'
 const MAX_RESULTS = 4
 /** Same-named stops closer than this are one place: platforms, both sides of a road. */
 const SAME_PLACE_M = 600
+/** A BRT halte farther than this makes a misleading "Dekat Halte …" hint. */
+const MAX_BRT_HINT_M = 1500
 
 /** GTFS halte names abbreviate a lot; spelled out, "stasiun gambir" finds "St. Gambir 1". */
 const ABBREVIATIONS: Record<string, string> = {
@@ -52,6 +54,8 @@ type Halte = {
   base: string
   /** Words of each stop name merged into it, so typing "Gambir 2" still finds "Gambir". */
   stopWords: string[][]
+  /** A nearby halte that tells it apart from haltes of the same name elsewhere. */
+  near?: string
   lat: number
   lon: number
   /** Routes serving any of its stops. */
@@ -76,7 +80,7 @@ export function searchStops(tt: Timetable, query: string): PlaceResult[] {
     id: halte.id,
     kind: 'stop',
     name: halte.name,
-    address: describe(tt, halte.routes),
+    address: describe(tt, halte.routes, halte.near),
     lat: halte.lat,
     lon: halte.lon,
   }))
@@ -110,8 +114,8 @@ function aliasScores(text: string): Map<string, number> {
   return scores
 }
 
-/** "Halte Transjakarta · 1, 6A, 9 +4": BRT corridors first. */
-function describe(tt: Timetable, routes: number[]): string {
+/** "Halte Transjakarta · 1, 6A, 9 +4", BRT corridors first, or "Dekat Halte Blok M · 1" for a name used elsewhere too. */
+function describe(tt: Timetable, routes: number[], near: string | undefined): string {
   const sorted = routes
     .map((r) => tt.routes[r])
     .sort(
@@ -120,8 +124,9 @@ function describe(tt: Timetable, routes: number[]): string {
         a.shortName.localeCompare(b.shortName, 'id', { numeric: true }),
     )
   const names = [...new Set(sorted.map((r) => r.shortName))]
-  const more = names.length > 4 ? ` +${names.length - 4}` : ''
-  return `Halte ${sorted[0]?.agency ?? ''} · ${names.slice(0, 4).join(', ')}${more}`
+  const shown = `${names.slice(0, 4).join(', ')}${names.length > 4 ? ` +${names.length - 4}` : ''}`
+  // The hint leads, so a narrow screen that cuts the line still shows where it is.
+  return near ? `Dekat Halte ${near} · ${shown}` : `Halte ${sorted[0]?.agency ?? ''} · ${shown}`
 }
 
 /** Lowercase words with abbreviations spelled out: "Sbr. St. Gambir" → seberang stasiun gambir. */
@@ -216,6 +221,39 @@ function haltes(tt: Timetable): Halte[] {
       })
     }
   }
+  addHints(tt, list)
   cache.set(tt, list)
   return list
+}
+
+/**
+ * Haltes sharing a name, such as two "Masjid At Taqwa" 22 km apart, get a
+ * hint: the nearest BRT halte within MAX_BRT_HINT_M, as it is the better
+ * known landmark, else the nearest halte of any kind. Hints that would not
+ * tell the haltes apart fall back to the nearest halte of any kind too.
+ */
+function addHints(tt: Timetable, list: Halte[]) {
+  const byName = new Map<string, Halte[]>()
+  for (const h of list) byName.set(h.text, [...(byName.get(h.text) ?? []), h])
+  const brt = list.filter((h) => h.routes.some((r) => tt.routes[r].category === 'BRT'))
+  const nearest = (h: Halte, candidates: Halte[], maxM = Infinity) => {
+    let best: Halte | undefined
+    let bestM = maxM
+    for (const c of candidates) {
+      if (c.base === h.base) continue
+      const m = distanceM(h.lat, h.lon, c.lat, c.lon)
+      if (m < bestM) {
+        best = c
+        bestM = m
+      }
+    }
+    return best && placeName(best.name)
+  }
+  for (const same of byName.values()) {
+    if (same.length < 2) continue
+    for (const h of same) h.near = nearest(h, brt, MAX_BRT_HINT_M) ?? nearest(h, list)
+    if (new Set(same.map((h) => h.near)).size < same.length) {
+      for (const h of same) h.near = nearest(h, list)
+    }
+  }
 }
