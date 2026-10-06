@@ -2,103 +2,93 @@
 
 PWA untuk mencari rute transportasi umum di Jabodetabek (TransJakarta, KRL, MRT, LRT, jalan kaki, motor/ojol) dengan opsi **tercepat**, **termurah**, dan **termudah**.
 
+Seluruhnya TypeScript dan dirancang jalan gratis di Vercel (plan Hobby): web app disajikan sebagai file statis, API berjalan sebagai Vercel Functions, dan mesin rute (RAPTOR) membaca jadwal dari file JSON yang ikut di-bundle. Tidak ada server atau database yang harus selalu nyala.
+
 ## Struktur
 
 ```
 goRute/
-├── web/                    # PWA: React + TypeScript + Vite
-│   ├── src/components/     # MapView, PlannerSheet, StatusPill
-│   ├── src/hooks/
-│   └── src/lib/api/        # client + schema.d.ts (hasil generate dari OpenAPI)
-├── backend/                # Go
-│   ├── api/openapi.yaml    # kontrak API Go ↔ TypeScript
-│   ├── cmd/api/            # HTTP API (:8080)
-│   ├── cmd/pipeline/       # CLI pengolah data transit
-│   └── internal/
-│       ├── config/
-│       ├── httpapi/        # router & handler
-│       ├── otp/            # client GraphQL OpenTripPlanner
-│       └── pipeline/       # unduh & olah sumber data
-├── otp/                    # konfigurasi + input/graph OpenTripPlanner (di-mount ke Docker)
+├── api/v1/                 # Vercel Functions: plan, places, status
+├── server/                 # logika backend, tidak bergantung pada Vercel
+│   ├── router/raptor.ts    # algoritma rute transit (RAPTOR)
+│   ├── planner/            # menjalankan pencarian, membentuk opsi, ranking
+│   ├── timetable/          # format & loader data/timetable.json
+│   ├── fare.ts             # tarif (GTFS + aturan TransJakarta)
+│   └── geocode.ts          # pencarian tempat lewat Photon
+├── shared/                 # tipe API & area layanan, dipakai web dan server
+├── src/                    # PWA: React + Vite + Tailwind + Motion + MapLibre
+├── scripts/                # pipeline data: unduh GTFS, build timetable
 ├── data/
 │   ├── raw/                # hasil unduhan (tidak di-commit)
-│   └── manual/             # GTFS buatan tangan: MRT, LRT, titik transfer
-├── scripts/fetch-osm.sh
-├── docker-compose.yml      # OTP + PostgreSQL/PostGIS
-└── Makefile                # `make` untuk melihat semua perintah
+│   ├── manual/             # GTFS buatan tangan: MRT, LRT, titik transfer (belum ada)
+│   └── timetable.json      # hasil `pnpm data:build`, di-commit
+├── vite.config.ts          # termasuk plugin yang menjalankan api/ saat dev & preview
+└── vercel.json             # region function: Singapura (sin1)
 ```
-
-## Stack
-
-| Lapisan | Teknologi |
-|---|---|
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, Motion, MapLibre GL (`react-map-gl`), vite-plugin-pwa |
-| Peta dasar | [OpenFreeMap](https://openfreemap.org) (gratis, tanpa API key) |
-| Backend | Go (`net/http`), kontrak OpenAPI → tipe TS via `openapi-typescript` + `openapi-fetch` |
-| Routing engine | OpenTripPlanner 2.10 (GTFS + OSM) |
-| Database | PostgreSQL 18 + PostGIS (disiapkan, belum dipakai API) |
 
 ## Mulai
 
-Butuh: Go 1.25+, Node 22+, pnpm, Docker. Untuk data OSM juga butuh `osmium` (`brew install osmium-tool`).
+Butuh Node 22.18+ dan pnpm.
 
 ```bash
-cp .env.example .env
-make install
-
-# Jalankan di dua terminal
-make api      # http://localhost:8080
-make web      # http://localhost:5173
+pnpm install
+pnpm dev        # web + API di http://localhost:5173
 ```
 
-Tanpa OTP, app tetap jalan dan menampilkan status "Routing engine belum jalan".
+| Perintah | Fungsi |
+|---|---|
+| `pnpm dev` | Web app + API (Vite menjalankan `api/` seperti Vercel) |
+| `pnpm test` | Test backend & pipeline (`node --test`) |
+| `pnpm check` | Lint + test + typecheck + build |
+| `pnpm preview` | Coba hasil build produksi, termasuk service worker |
+| `pnpm data:fetch` | Unduh GTFS ke `data/raw/` |
+| `pnpm data:build` | Olah GTFS jadi `data/timetable.json` |
 
-### Menyalakan routing engine
+Untuk memperbarui jadwal: `pnpm data:fetch && pnpm data:build`, cek `pnpm test`, lalu commit `data/timetable.json`.
 
-```bash
-make fetch-gtfs   # GTFS TransJakarta → data/raw
-make fetch-osm    # OSM Jawa (~900 MB) → dipotong & difilter ke Jabodetabek (~50 MB)
-make otp-build    # build graph (~2–3 menit)
-make otp-up       # OTP di http://localhost:8081
-```
+## Deploy ke Vercel
 
-OTP memakai heap 3 GB (`OTP_MEMORY` di `.env`) dan butuh sekitar 2,2 GB saat melayani, jadi Docker Desktop perlu jatah RAM minimal 4 GB. File `data/raw/java-latest.osm.pbf` hanya dipakai ulang oleh `fetch-osm` dan boleh dihapus kalau disk penuh.
+1. Buka [vercel.com/new](https://vercel.com/new) dan import repo ini. Framework Vite terdeteksi otomatis; tidak perlu mengubah pengaturan build.
+2. Selesai. Tidak ada environment variable yang wajib. `PHOTON_URL` opsional untuk memakai instance Photon sendiri.
+
+Batas plan Hobby yang relevan: hanya untuk penggunaan non-komersial, 4 jam CPU aktif dan 1 juta request function per bulan. Satu pencarian rute memakai sekitar 0,1 detik CPU; hasil pencarian tempat di-cache CDN sehari sehingga tidak memakai jatah function.
+
+## Cara kerja mesin rute
+
+- **Data.** `scripts/gtfs/build.ts` mengelompokkan perjalanan GTFS menjadi *pola* (rute + urutan halte + waktu tempuh yang sama), mengekspansi `frequencies.txt` menjadi jam keberangkatan, dan menempelkan halte ke `shapes.txt` untuk garis di peta.
+- **RAPTOR.** Putaran ke-*k* mencari waktu tiba paling awal di setiap halte dengan maksimal *k* kali naik, sehingga hasilnya himpunan Pareto antara waktu tiba dan jumlah transit.
+- **Pencarian.** Tiap permintaan menjalankan pencarian normal (jalan ≤1,2 km, transfer ≤500 m), pencarian "mudah" (jalan ≤600 m, transfer ≤200 m, maks 3 kali naik), dan pencarian ulang tanpa tiap rute dari opsi tercepat untuk memunculkan alternatif. Hasil yang sama digabung dan opsi yang jauh lebih lambat dari yang tercepat dibuang.
+- **Jalan kaki.** Masih estimasi: jarak garis lurus × 1,3 dengan kecepatan 4,5 km/jam, dan digambar sebagai garis lurus putus-putus.
+- **Tarif.** Dari `fare_attributes`/`fare_rules` GTFS, ditambah aturan yang tidak bisa dinyatakan di GTFS (TransJakarta Rp2.000 pukul 05.00–07.00; satu tiket berlaku untuk transfer selama 3 jam).
 
 ### Endpoint API
 
 | Endpoint | Fungsi |
 |---|---|
-| `GET /api/v1/status` | Status API dan OTP, termasuk feed yang dimuat |
+| `GET /api/v1/status` | Feed yang dimuat dan waktu build data |
 | `GET /api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]` | Opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi |
 | `GET /api/v1/places?q=` | Cari tempat di Jabodetabek (diteruskan ke [Photon](https://photon.komoot.io)) |
 
-Tarif dihitung di `backend/internal/fare` dari data GTFS yang sama dengan yang dipakai OTP (`otp/build-config.json`), ditambah aturan yang tidak bisa dinyatakan di GTFS (misal tarif TransJakarta Rp2.000 pukul 05.00–07.00).
-
-### Mengubah API
-
-1. Ubah `backend/api/openapi.yaml`.
-2. `make gen-api` untuk memperbarui `web/src/lib/api/schema.d.ts`.
-3. Implementasikan handler di `backend/internal/httpapi`.
+Bentuk respons ada di `shared/api.ts`.
 
 ## Sumber data
 
 | Moda | Sumber | Status |
 |---|---|---|
-| TransJakarta (BRT, non-BRT, Mikrotrans, Transjabodetabek, Royaltrans) | [GTFS resmi](https://gtfs.transjakarta.co.id/files/file_gtfs.zip) | ✅ Di pipeline. Jadwal berbasis interval (`frequencies.txt`), lisensi belum jelas |
+| TransJakarta (BRT, non-BRT, Mikrotrans, Transjabodetabek, Royaltrans) | [GTFS resmi](https://gtfs.transjakarta.co.id/files/file_gtfs.zip) | ✅ Jadwal berbasis interval (`frequencies.txt`), lisensi belum jelas |
 | KRL Commuter Line | Scrape jadwal per stasiun dari web KAI Commuter | ⏳ Belum. Endpoint tidak resmi dan butuh token |
 | MRT Jakarta, LRT Jakarta, LRT Jabodebek | GTFS manual di `data/manual/` | ⏳ Belum |
-| Jalan kaki / jalan raya | OpenStreetMap (Geofabrik) | ✅ `make fetch-osm` |
+| Jalan kaki | OpenStreetMap | ⏳ Masih estimasi garis lurus |
 | Ojol / taksi | Estimasi dari jarak + regulasi tarif | ⏳ Belum |
 | Pencarian tempat | Photon publik (komoot) berbasis OSM | ✅ Untuk pengembangan |
 
 ## Roadmap
 
-- [x] Struktur repo, API status, PWA shell dengan peta
-- [x] OTP jalan dengan GTFS TransJakarta + OSM
+- [x] PWA dengan peta, pencarian tempat, kartu opsi, animasi garis rute
+- [x] Mesin rute RAPTOR di TypeScript + tarif TransJakarta, siap deploy ke Vercel
+- [ ] Update GTFS otomatis (GitHub Actions) lalu deploy ulang
+- [ ] Jalan kaki lewat jaringan jalan OSM
 - [ ] Scraper KRL → GTFS
 - [ ] GTFS manual MRT, LRT Jakarta, LRT Jabodebek + titik transfer antar moda
-- [x] Endpoint `/api/v1/plan` + modul tarif TransJakarta (transfer 3 jam, tarif pagi, Mikrotrans gratis, Royaltrans)
-- [x] Pengurutan opsi tercepat / termurah / termudah
-- [x] Pencarian tempat, UI hasil rute + animasi garis rute di peta
 - [ ] Tarif KRL (per km), MRT, LRT, dan integrasi JakLingko (maks Rp10.000/180 menit)
-- [ ] Photon self-hosted (instance publik hanya untuk pengembangan)
+- [ ] Supabase: akun, rute favorit, pencarian tempat sendiri (pengganti Photon publik)

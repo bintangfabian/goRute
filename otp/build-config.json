@@ -1,6 +1,0 @@
-{
-  "osm": [{ "source": "jabodetabek.osm.pbf" }],
-  "transitFeeds": [
-    { "type": "gtfs", "feedId": "TJ", "source": "transjakarta-gtfs.zip" }
-  ]
-}

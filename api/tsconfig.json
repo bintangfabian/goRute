@@ -1,0 +1,5 @@
+{
+  // Vercel compiles each function with the nearest tsconfig.json and does
+  // not follow project references, so point it at the backend config.
+  "extends": "../tsconfig.server.json"
+}

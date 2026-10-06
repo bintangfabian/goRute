@@ -9,6 +9,6 @@ lrt-jabodebek/
 transfers/        perpindahan antar operator (misal Sudirman ↔ Dukuh Atas) + waktu jalan kaki
 ```
 
-Pipeline akan mem-zip tiap folder jadi `<operator>-gtfs.zip` dan memvalidasinya sebelum dipakai OTP.
+Nantinya `scripts/build-timetable.ts` membaca tiap folder ini sebagai feed GTFS, sama seperti feed hasil unduhan di `data/raw/`.
 
 Catat sumber dan tanggal setiap data (jadwal resmi, interval keberangkatan, tarif) di README folder masing-masing supaya mudah diperbarui.

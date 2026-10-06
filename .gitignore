@@ -1,9 +1,14 @@
-# Data unduhan & hasil build: besar dan bisa dibuat ulang
+# Unduhan data mentah: besar dan bisa diunduh ulang (pnpm data:fetch)
 data/raw/*
 !data/raw/.gitkeep
-otp/*.zip
-otp/*.pbf
-otp/*.obj
 
-.env
+node_modules
+dist
+.vercel
+*.local
+*.log
+.env*
 .DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
