@@ -8,6 +8,8 @@ import type { Timetable } from './timetable/timetable.ts'
 const MAX_RESULTS = 4
 /** Same-named stops closer than this are one place: platforms, both sides of a road. */
 const SAME_PLACE_M = 600
+/** A BRT halte farther than this makes a misleading "Dekat Halte …" hint. */
+const MAX_BRT_HINT_M = 1500
 
 /** GTFS halte names abbreviate a lot; spelled out, "stasiun gambir" finds "St. Gambir 1". */
 const ABBREVIATIONS: Record<string, string> = {
@@ -225,17 +227,18 @@ function haltes(tt: Timetable): Halte[] {
 }
 
 /**
- * Haltes sharing a name, such as two "Masjid At Taqwa" 22 km apart, get the
- * nearest BRT halte as a hint, or the nearest halte of any kind when the
- * BRT hints would not tell them apart.
+ * Haltes sharing a name, such as two "Masjid At Taqwa" 22 km apart, get a
+ * hint: the nearest BRT halte within MAX_BRT_HINT_M, as it is the better
+ * known landmark, else the nearest halte of any kind. Hints that would not
+ * tell the haltes apart fall back to the nearest halte of any kind too.
  */
 function addHints(tt: Timetable, list: Halte[]) {
   const byName = new Map<string, Halte[]>()
   for (const h of list) byName.set(h.text, [...(byName.get(h.text) ?? []), h])
   const brt = list.filter((h) => h.routes.some((r) => tt.routes[r].category === 'BRT'))
-  const nearest = (h: Halte, candidates: Halte[]) => {
+  const nearest = (h: Halte, candidates: Halte[], maxM = Infinity) => {
     let best: Halte | undefined
-    let bestM = Infinity
+    let bestM = maxM
     for (const c of candidates) {
       if (c.base === h.base) continue
       const m = distanceM(h.lat, h.lon, c.lat, c.lon)
@@ -248,7 +251,7 @@ function addHints(tt: Timetable, list: Halte[]) {
   }
   for (const same of byName.values()) {
     if (same.length < 2) continue
-    for (const h of same) h.near = nearest(h, brt)
+    for (const h of same) h.near = nearest(h, brt, MAX_BRT_HINT_M) ?? nearest(h, list)
     if (new Set(same.map((h) => h.near)).size < same.length) {
       for (const h of same) h.near = nearest(h, list)
     }
