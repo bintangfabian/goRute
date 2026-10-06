@@ -2,9 +2,11 @@
 //
 //   A ──1── B ──1── C ──1── D   E ──2── F
 //   └──────────X (express)──────┘
+//   └──────────Y (express)──────┘
 //
 // Stops are ~1.1 km apart along one street; D and E are ~22 m apart, so
-// D→E is a walking transfer. Route X is a pricey weekday-only express.
+// D→E is a walking transfer. Routes X and Y are pricey weekday-only
+// expresses; Y is a little slower.
 
 import { buildTimetable } from '../../scripts/gtfs/build.ts'
 import { Timetable } from '../timetable/timetable.ts'
@@ -36,6 +38,7 @@ const files = new Map([
       '1,T,1,A - D,BRT,3,D62126,FFFFFF',
       '2,T,2,E - F,BRT,3,,',
       'X,T,X,A - D Express,Royaltrans,3,000000,FFFFFF',
+      'Y,T,Y,A - D Express 2,Royaltrans,3,000000,FFFFFF',
     ),
   ],
   [
@@ -46,7 +49,7 @@ const files = new Map([
       'WD,1,1,1,1,1,0,0,20260101,20271231',
     ),
   ],
-  ['trips.txt', csv('route_id,service_id,trip_id,trip_headsign', '1,ALL,t1,D', '2,ALL,t2,F', 'X,WD,tx,D')],
+  ['trips.txt', csv('route_id,service_id,trip_id,trip_headsign', '1,ALL,t1,D', '2,ALL,t2,F', 'X,WD,tx,D', 'Y,WD,ty,D')],
   [
     'stop_times.txt',
     csv(
@@ -59,6 +62,8 @@ const files = new Map([
       't2,05:04:00,05:04:00,F,2',
       'tx,05:00:00,05:00:00,A,1',
       'tx,05:08:00,05:08:00,D,2',
+      'ty,05:00:00,05:00:00,A,1',
+      'ty,05:10:00,05:10:00,D,2',
     ),
   ],
   [
@@ -68,6 +73,7 @@ const files = new Map([
       't1,05:00:00,22:00:00,600',
       't2,05:00:00,22:00:00,600',
       'tx,05:00:00,22:00:00,1800',
+      'ty,05:00:00,22:00:00,1800',
     ),
   ],
   [
@@ -78,7 +84,7 @@ const files = new Map([
       'PP,20000,IDR,0,,10800',
     ),
   ],
-  ['fare_rules.txt', csv('fare_id,route_id', 'FP,1', 'FP,2', 'PP,X')],
+  ['fare_rules.txt', csv('fare_id,route_id', 'FP,1', 'FP,2', 'PP,X', 'PP,Y')],
 ])
 
 export function testTimetable(): Timetable {

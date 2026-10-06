@@ -48,6 +48,18 @@ test('never offers an option another one beats on every count', () => {
   }
 })
 
+test('offers the regular fare next to Royaltrans', () => {
+  const cibubur: [number, number] = [-6.369, 106.893]
+  const bundaranHI: [number, number] = [-6.195, 106.8231]
+  const cheapest = (time: string) => {
+    const p = plan(cibubur, bundaranHI, time)
+    return p.itineraries.find((it) => it.id === p.ranking.termurah[0])!
+  }
+  assert.equal(cheapest('2026-10-06T07:00:00+07:00').fare.totalIdr, 3500)
+  // Over an hour slower than the Rp20.000 Royaltrans, but Rp18.000 cheaper.
+  assert.equal(cheapest('2026-10-06T05:30:00+07:00').fare.totalIdr, 2000)
+})
+
 test('walks a short trip instead of offering a slower, pricier bus', () => {
   // Bundaran HI → Grand Indonesia, about 500 m.
   const p = plan([-6.195, 106.8231], [-6.1951, 106.8196], '2026-10-06T10:00:00+07:00')

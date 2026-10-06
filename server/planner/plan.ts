@@ -29,6 +29,12 @@ const MAX_WALK_ONLY_SEC = 20 * 60
  */
 const MAX_SLOWDOWN = 1.5
 const SLOWDOWN_SLACK_SEC = 15 * 60
+/**
+ * A cheaper option may take longer still, a minute for every Rp250 it saves
+ * over the fastest one (about Rp15.000 an hour): a Rp3.500 bus an hour
+ * slower than a Rp20.000 Royaltrans stays, a free bus hours later does not.
+ */
+const RUPIAH_PER_MINUTE = 250
 
 export function planTrip(tt: Timetable, req: PlanRequest): Plan {
   const day = wibDay(req.departure.getTime())
@@ -59,20 +65,39 @@ export function planTrip(tt: Timetable, req: PlanRequest): Plan {
       found.push(...search(DEFAULT_SEARCH, new Set([route])))
     }
   }
+  // The router weighs arrival time and transfers, not fares, so a slower
+  // trip at the regular fare never shows up next to premium buses unless
+  // they are all banned at once.
+  const premium = premiumRoutes(tt)
+  if (found.some((j) => j.legs.some((l) => l.kind === 'ride' && premium.has(tt.patterns[l.pattern].route)))) {
+    found.push(...search(DEFAULT_SEARCH, premium))
+  }
 
   const options = dedupe(found.map((j) => toOption(tt, j, req, day.midnightMs)))
   const walk = walkOnly(req, departure, day.midnightMs)
   if (walk) options.push(walk)
 
+  const trips = options.map((o) => o.itinerary)
+  if (trips.length === 0) return { itineraries: [], ranking: rank([]) }
   const leaveMs = req.departure.getTime()
-  const fastestMs = Math.min(...options.map((o) => Date.parse(o.itinerary.end) - leaveMs))
-  const limitMs = leaveMs + fastestMs * MAX_SLOWDOWN + SLOWDOWN_SLACK_SEC * 1000
-  const itineraries = options
-    .map((o) => o.itinerary)
-    .filter((it) => Date.parse(it.end) <= limitMs)
+  const soonest = trips.reduce((a, b) => (Date.parse(b.end) < Date.parse(a.end) ? b : a))
+  const fastestMs = Date.parse(soonest.end) - leaveMs
+  const limitMs = (it: Omit<Itinerary, 'id'>) => {
+    // A fare that is only a lower bound proves no saving.
+    const saved = it.fare.complete ? Math.max(0, soonest.fare.totalIdr - it.fare.totalIdr) : 0
+    return leaveMs + fastestMs * MAX_SLOWDOWN + (SLOWDOWN_SLACK_SEC + (saved / RUPIAH_PER_MINUTE) * 60) * 1000
+  }
+  const itineraries = trips
+    .filter((it) => Date.parse(it.end) <= limitMs(it))
     .filter((it, _, all) => !all.some((other) => dominates(other, it)))
     .map((it, i): Itinerary => ({ ...it, id: `r${i + 1}` }))
   return { itineraries, ranking: rank(itineraries) }
+}
+
+/** Routes priced above the lowest paid fare, such as Royaltrans. */
+function premiumRoutes(tt: Timetable): Set<number> {
+  const regular = Math.min(...tt.fares.map((f) => f.price).filter((p) => p > 0))
+  return new Set(tt.routes.flatMap((r, i) => (r.fare >= 0 && tt.fares[r.fare].price > regular ? [i] : [])))
 }
 
 function nearby(tt: Timetable, p: Place, s: Search): StopWalk[] {

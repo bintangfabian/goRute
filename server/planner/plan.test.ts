@@ -23,6 +23,8 @@ describe('planTrip', () => {
   test('offers the fast express and the cheap local route', () => {
     const p = plan('A', 'F', '2026-10-06T08:00:00+07:00') // Tuesday
 
+    // Banning X alone only turns up Y, the other express: the local trip
+    // shows up only when every premium route is banned at once.
     assert.deepEqual(p.itineraries.map(routes).sort(), [
       ['1', '2'],
       ['X', '2'],
