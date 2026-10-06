@@ -5,14 +5,19 @@ import { formatClock, formatDistance, formatDuration, formatRupiah } from '../li
 import { PREFERENCES, type Preference } from '../lib/trip'
 import { BusIcon, ChevronIcon, TrainIcon, WalkIcon } from './icons'
 
+// A trip that starts this long after it was asked for says so, or it reads like one leaving now.
+const LATE_START_SEC = 30 * 60
+
 type Props = {
   plan: Plan
+  /** When the trip was planned from, in epoch ms. */
+  departure: number
   preference: Preference
   selectedId: string | null
   onSelect: (id: string) => void
 }
 
-export function ItineraryList({ plan, preference, selectedId, onSelect }: Props) {
+export function ItineraryList({ plan, departure, preference, selectedId, onSelect }: Props) {
   const byId = new Map(plan.itineraries.map((it) => [it.id, it]))
   const ordered = plan.ranking[preference].flatMap((id) => byId.get(id) ?? [])
 
@@ -30,6 +35,7 @@ export function ItineraryList({ plan, preference, selectedId, onSelect }: Props)
           >
             <ItineraryCard
               itinerary={it}
+              startsInSec={(Date.parse(it.start) - departure) / 1000}
               winsAt={PREFERENCES.filter((p) => plan.ranking[p.id][0] === it.id).map((p) => p.label)}
               selected={it.id === selectedId}
               onSelect={() => onSelect(it.id)}
@@ -41,8 +47,14 @@ export function ItineraryList({ plan, preference, selectedId, onSelect }: Props)
   )
 }
 
-function ItineraryCard(props: { itinerary: Itinerary; winsAt: string[]; selected: boolean; onSelect: () => void }) {
-  const { itinerary: it, winsAt, selected } = props
+function ItineraryCard(props: {
+  itinerary: Itinerary
+  startsInSec: number
+  winsAt: string[]
+  selected: boolean
+  onSelect: () => void
+}) {
+  const { itinerary: it, startsInSec, winsAt, selected } = props
   return (
     <motion.button
       type="button"
@@ -58,6 +70,11 @@ function ItineraryCard(props: { itinerary: Itinerary; winsAt: string[]; selected
           <p className="text-xs text-slate-500">
             {formatClock(it.start)} – {formatClock(it.end)}
           </p>
+          {startsInSec >= LATE_START_SEC && (
+            <p className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+              Berangkat {formatDuration(startsInSec)} lagi
+            </p>
+          )}
         </div>
         <div className="text-right">
           <p className="text-base font-bold">
