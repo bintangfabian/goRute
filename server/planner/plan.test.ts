@@ -108,6 +108,77 @@ describe('planTrip', () => {
     assert.equal(back.reason, 'far-from-destination')
     assert.equal(plan('A', 'F', '2026-10-06T08:00:00+07:00').reason, undefined)
   })
+
+  test('walks further, or says so, when the buses nearby are off that day', () => {
+    // Z runs on weekdays from G, a 2.2 km walk west of A (past the usual
+    // 1.2 km), to H, which nothing else serves. Q's service has ended.
+    const csv = (...lines: string[]) => lines.join('\n') + '\n'
+    const files = new Map([
+      ['agency.txt', csv('agency_id,agency_name,agency_url,agency_timezone', 'R,Royal,https://example.com,Asia/Jakarta')],
+      [
+        'stops.txt',
+        csv('stop_id,stop_name,stop_lat,stop_lon', 'G,Halte G,-6.2,106.785', 'H,Halte H,-6.3,106.8', 'K,Halte K,-6.4,106.8'),
+      ],
+      [
+        'routes.txt',
+        csv('route_id,agency_id,route_short_name,route_long_name,route_desc,route_type', 'Z,R,Z,G - H,Royaltrans,3', 'Q,R,Q,K - K,Royaltrans,3'),
+      ],
+      [
+        'calendar.txt',
+        csv(
+          'service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date',
+          'WD,1,1,1,1,1,0,0,20260101,20271231',
+          'GONE,1,1,1,1,1,1,1,20250101,20251231',
+        ),
+      ],
+      ['trips.txt', csv('route_id,service_id,trip_id', 'Z,WD,z1', 'Q,GONE,q1')],
+      [
+        'stop_times.txt',
+        csv(
+          'trip_id,arrival_time,departure_time,stop_id,stop_sequence',
+          'z1,06:00:00,06:00:00,G,1',
+          'z1,06:20:00,06:20:00,H,2',
+          'q1,06:00:00,06:00:00,K,1',
+          'q1,06:30:00,06:30:00,K,2',
+        ),
+      ],
+      ['fare_attributes.txt', csv('fare_id,price,currency_type,payment_method,transfers,transfer_duration', 'RP,20000,IDR,0,0,')],
+      ['fare_rules.txt', csv('fare_id,route_id', 'RP,Z', 'RP,Q')],
+    ])
+    const royal = testTimetable([{ id: 'RT', name: 'Royal', files }])
+    const at = (from: [number, number], to: keyof typeof STOPS, time: string) =>
+      planTrip(royal, {
+        from: { name: 'Asal', lat: from[0], lon: from[1] },
+        to: { name: 'Tujuan', ...STOPS[to] },
+        departure: new Date(time),
+      })
+    const saturday = '2026-10-10T08:00:00+07:00'
+
+    // G's only bus is off on Saturday, so the trip walks on to A for route 1.
+    const walked = at([-6.2, 106.785], 'D', saturday)
+    assert.deepEqual(walked.itineraries.map(routes), [['1']])
+    assert.ok(walked.itineraries[0].legs[0].distanceM > 1200, `walk ${walked.itineraries[0].legs[0].distanceM} m`)
+
+    // Nothing else runs near H: say so, and when buses run at both ends again.
+    const fromH = at([-6.3, 106.8], 'D', saturday)
+    assert.deepEqual(fromH.itineraries, [])
+    assert.equal(fromH.reason, 'no-service-near-origin')
+    assert.equal(fromH.nextServiceDate, '2026-10-12')
+    assert.equal(at([-6.3, 106.8], 'D', '2026-10-11T08:00:00+07:00').nextServiceDate, '2026-10-12') // from Sunday
+    const toH = planTrip(royal, {
+      from: { name: 'Asal', ...STOPS.A },
+      to: { name: 'Tujuan', lat: -6.3, lon: 106.8 },
+      departure: new Date(saturday),
+    })
+    assert.equal(toH.reason, 'no-service-near-destination')
+    assert.equal(toH.nextServiceDate, '2026-10-12')
+    // On Monday Z runs, it just never gets to D.
+    assert.equal(at([-6.3, 106.8], 'D', '2026-10-12T08:00:00+07:00').reason, 'no-trip')
+    // No bus near K in the week ahead, so no date to offer.
+    const fromK = at([-6.4, 106.8], 'D', saturday)
+    assert.equal(fromK.reason, 'no-service-near-origin')
+    assert.equal(fromK.nextServiceDate, undefined)
+  })
 })
 
 test('counts a route as premium only against fares of its own feed', () => {

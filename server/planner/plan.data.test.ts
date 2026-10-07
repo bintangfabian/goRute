@@ -72,3 +72,19 @@ test('walks a short trip instead of offering a slower, pricier bus', () => {
   const p = plan([-6.195, 106.8231], [-6.1951, 106.8196], '2026-10-06T10:00:00+07:00')
   assert.deepEqual(p.itineraries.map(routes), [[]])
 })
+
+test('Royaltrans areas on a weekend: walk to a running bus, or say when one runs', () => {
+  const bundaranHI: [number, number] = [-6.195, 106.8231]
+  // Bintaro Xchange has only S31 within 2.5 km, and it runs Monday to Friday.
+  const saturday = plan([-6.2853, 106.7291], bundaranHI, '2026-10-10T07:00:00+07:00')
+  assert.deepEqual(saturday.itineraries, [])
+  assert.equal(saturday.reason, 'no-service-near-origin')
+  assert.equal(saturday.nextServiceDate, '2026-10-12')
+  const monday = plan([-6.2853, 106.7291], bundaranHI, '2026-10-12T07:00:00+07:00')
+  assert.ok(monday.itineraries.some((it) => routes(it)[0] === 'S31'))
+  // Mega Cinere's D31 and D32 are weekday-only too, but Mikrotrans runs past
+  // 1.2 km away: worth the walk on a Saturday.
+  const cinere = plan([-6.3297, 106.7838], [-6.1754, 106.8272], '2026-10-10T07:00:00+07:00')
+  assert.ok(cinere.itineraries.length > 0)
+  for (const it of cinere.itineraries) assert.ok(routes(it).every((r) => !r.startsWith('D3')), routes(it).join(' > '))
+})

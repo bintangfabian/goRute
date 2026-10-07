@@ -13,8 +13,14 @@ export type Plan = {
   itineraries: Itinerary[]
   /** Itinerary IDs from best to worst for each preference. */
   ranking: Record<'tercepat' | 'termurah' | 'termudah', string[]>
-  /** Why there is no itinerary, when there is none: no stop within walking reach of an end, or no trip at that time. */
-  reason?: 'far-from-origin' | 'far-from-destination' | 'no-trip'
+  /**
+   * Why there is no itinerary, when there is none: no stop within walking reach
+   * of an end, no bus near an end on the departure's day (weekday-only routes
+   * on a weekend, say), or no trip at that time.
+   */
+  reason?: 'far-from-origin' | 'far-from-destination' | 'no-service-near-origin' | 'no-service-near-destination' | 'no-trip'
+  /** With a no-service reason: the next day buses run near both ends (YYYY-MM-DD, WIB), if within a week. */
+  nextServiceDate?: string
 }
 
 export type Itinerary = {

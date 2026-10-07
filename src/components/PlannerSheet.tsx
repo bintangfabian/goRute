@@ -1,13 +1,15 @@
 import { AnimatePresence, motion, useReducedMotion, type PanInfo } from 'motion/react'
 import { useId, useState, type ReactNode, type Ref } from 'react'
+import { wibClock, wibTime } from '../../shared/time.ts'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import type { PlanState } from '../hooks/usePlan'
 import type { ServiceState } from '../hooks/useServiceStatus'
+import { formatWeekday } from '../lib/format'
 import { PREFERENCES, type Endpoint, type PickedTime, type Preference } from '../lib/trip'
 import { BrandBar } from './BrandBar'
 import { DepartureButton, DeparturePanel } from './DeparturePicker'
-import { RefreshIcon, SwapIcon } from './icons'
-import { FarArt, NoTripArt, OfflineArt, ReadyArt, SamePlaceArt } from './illustrations'
+import { ClockIcon, RefreshIcon, SwapIcon } from './icons'
+import { FarArt, NoTripArt, OffDayArt, OfflineArt, ReadyArt, SamePlaceArt } from './illustrations'
 import { ItineraryList } from './ItineraryList'
 import { MapAttribution } from './map/MapView'
 import { PlaceField } from './PlaceField'
@@ -34,7 +36,7 @@ type Props = {
 
 // A bottom sheet on phones (tap or swipe the handle to grow it), a panel on the left on wide screens.
 export function PlannerSheet(props: Props) {
-  const { ref, origin, destination, preference } = props
+  const { ref, origin, destination, preference, plan } = props
   const wide = useMediaQuery('(min-width: 1024px)')
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -53,6 +55,12 @@ export function PlannerSheet(props: Props) {
     setExpanded(now)
   }
   const searching = editing && !wide
+  // A message with a button (Coba lagi, Cari untuk Senin) may take more of a short phone,
+  // so the button stays in view; everything else leaves that room to the map.
+  const withButton =
+    !props.samePlace &&
+    (plan.kind === 'error' ||
+      (plan.kind === 'ready' && plan.plan.itineraries.length === 0 && plan.plan.nextServiceDate !== undefined))
 
   return (
     <motion.section
@@ -64,7 +72,7 @@ export function PlannerSheet(props: Props) {
       // Expanded, the sheet is tall whatever its content, so the fields sit high and the
       // suggestions under them stay above the on-screen keyboard.
       className={`absolute inset-x-0 bottom-0 z-10 mx-auto flex max-w-lg flex-col rounded-t-3xl bg-white shadow-[0_-8px_30px_rgb(0,0,0,0.12)] transition-[max-height,min-height] duration-300 ease-out ${
-        expanded ? 'max-h-[88dvh] min-h-[88dvh]' : 'max-h-[62dvh] min-h-0'
+        expanded ? 'max-h-[88dvh] min-h-[88dvh]' : withButton ? 'max-h-[70dvh] min-h-0' : 'max-h-[62dvh] min-h-0'
       } lg:inset-y-4 lg:right-auto lg:left-4 lg:mx-0 lg:max-h-none lg:min-h-0 lg:w-[420px] lg:max-w-none lg:rounded-3xl lg:shadow-[0_12px_40px_rgb(0,0,0,0.14)]`}
     >
       {wide ? (
@@ -205,8 +213,8 @@ function Results(props: Props) {
         </State>
       )
     case 'ready': {
-      const { itineraries, reason } = plan.plan
-      if (itineraries.length === 0) return <Empty reason={reason} />
+      const { itineraries } = plan.plan
+      if (itineraries.length === 0) return <Empty ready={plan} onPick={props.onPickedTimeChange} />
       return (
         <>
           <p role="status" className="sr-only">
@@ -226,7 +234,37 @@ function Results(props: Props) {
   }
 }
 
-function Empty({ reason }: { reason?: 'far-from-origin' | 'far-from-destination' | 'no-trip' }) {
+function Empty({ ready, onPick }: { ready: Extract<PlanState, { kind: 'ready' }>; onPick: (value: PickedTime) => void }) {
+  const { reason, nextServiceDate } = ready.plan
+  if (reason === 'no-service-near-origin' || reason === 'no-service-near-destination') {
+    const end = reason === 'no-service-near-origin' ? 'titik asal' : 'tujuan'
+    // Same clock on the next day with buses, so the rider only changes the day.
+    const clock = ready.picked?.clock ?? wibClock(ready.departure)
+    const next = nextServiceDate ? { ymd: Number(nextServiceDate.replaceAll('-', '')), clock } : null
+    return (
+      <State
+        art={<OffDayArt />}
+        title={`Tidak ada bus di sekitar ${end} hari ${formatWeekday(ready.departure)}`}
+        action={
+          next && (
+            <motion.button
+              type="button"
+              onClick={() => onPick(next)}
+              whileTap={{ scale: 0.95 }}
+              className="mt-3 inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none"
+            >
+              <ClockIcon className="size-4" />
+              Cari untuk {formatWeekday(wibTime(next.ymd, clock))}, {clock.replace(':', '.')}
+            </motion.button>
+          )
+        }
+      >
+        {next
+          ? 'Rutenya hanya beroperasi di hari tertentu.'
+          : `Rute di dekat sini tidak beroperasi sepekan ke depan. Coba geser ${end} ke halte lain.`}
+      </State>
+    )
+  }
   if (reason === 'far-from-origin' || reason === 'far-from-destination') {
     const end = reason === 'far-from-origin' ? 'titik asal' : 'tujuan'
     return (
@@ -251,7 +289,10 @@ function State(props: { art: ReactNode; title: string; children: ReactNode; acti
       transition={{ duration: 0.25 }}
       className="flex flex-col items-center pb-2 text-center"
     >
-      {props.art}
+      {/* On short phones a state with a button draws its scene smaller, or not at all, so the button stays in view. */}
+      <div className={props.action ? '[@media(max-height:600px)]:hidden [@media(max-height:700px)]:[&>svg]:h-11' : undefined}>
+        {props.art}
+      </div>
       <p className="mt-2 text-sm font-bold text-slate-800">{props.title}</p>
       <p className={`mt-1 max-w-xs text-sm ${props.tone === 'error' ? 'text-red-600' : 'text-slate-500'}`}>
         {props.children}

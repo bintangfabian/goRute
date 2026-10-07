@@ -10,6 +10,9 @@ const DAY_WORDS: Record<number, string> = { [-1]: 'kemarin', 0: '', 1: 'besok', 
 
 export const formatClock = (iso: string) => clock.format(new Date(iso))
 
+/** The WIB weekday of `ms`, e.g. "Sabtu". */
+export const formatWeekday = (ms: number) => weekday.format(ms)
+
 /** The day of `ms`, `days` days after today: '' (today), kemarin, besok, lusa, or the weekday. */
 export function formatDay(ms: number, days: number) {
   return DAY_WORDS[days] ?? weekday.format(ms)

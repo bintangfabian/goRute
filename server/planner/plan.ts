@@ -4,7 +4,7 @@ import type { Itinerary, Leg, Place, Plan } from '../../shared/api.ts'
 import { quoteFares } from '../fare.ts'
 import { lineLengthM, type LonLat } from '../geo.ts'
 import { raptor, type Journey, type ServiceDay, type StopWalk } from '../router/raptor.ts'
-import { addDays, wibDay } from '../../shared/time.ts'
+import { addDays, wibDay, type WibDay } from '../../shared/time.ts'
 import type { Pattern, Timetable } from '../timetable/timetable.ts'
 import { walkMeters, walkSeconds } from '../walk.ts'
 import { keepDistinct, rank } from './rank.ts'
@@ -16,8 +16,14 @@ type Search = { maxWalkM: number; maxTransferM: number; maxRides: number }
 const DEFAULT_SEARCH: Search = { maxWalkM: 1200, maxTransferM: 500, maxRides: 5 }
 /** Surfaces options with fewer transfers and shorter walks that the default search prunes as slower. */
 const EASY_SEARCH: Search = { maxWalkM: 600, maxTransferM: 200, maxRides: 3 }
-/** Walking radius used when no stop is within DEFAULT_SEARCH.maxWalkM of an endpoint. */
+/**
+ * Walking radius used when no stop within DEFAULT_SEARCH.maxWalkM of an
+ * endpoint has a bus that day: there is none, or its routes are off, like the
+ * weekday-only Royaltrans S31 at Bintaro Xchange on a Saturday.
+ */
 const FAR_WALK_M = 2500
+/** How many days ahead an empty plan looks for buses near both ends again. */
+const NEXT_SERVICE_DAYS = 7
 /** The default search is re-run without each route of the fastest journey, up to this many times. */
 const MAX_ALTERNATIVES = 3
 /** Walk-only trips longer than this are dropped: nobody asks a transit planner to walk for an hour. */
@@ -44,13 +50,14 @@ export function planTrip(tt: Timetable, req: PlanRequest): Plan {
     const d = addDays(day, delta)
     return { offset: delta * 86_400, active: tt.activeServices(d.ymd, d.weekday) }
   })
+  const today = days[1].active
 
   const search = (s: Search, bannedRoutes?: Set<number>) =>
     raptor(tt, {
       departure,
       days,
-      access: nearby(tt, req.from, s),
-      egress: nearby(tt, req.to, s),
+      access: nearby(tt, req.from, s, today),
+      egress: nearby(tt, req.to, s, today),
       maxRides: s.maxRides,
       maxTransferM: s.maxTransferM,
       bannedRoutes,
@@ -78,7 +85,7 @@ export function planTrip(tt: Timetable, req: PlanRequest): Plan {
   if (walk) options.push(walk)
 
   const trips = options.map((o) => o.itinerary)
-  if (trips.length === 0) return { itineraries: [], ranking: rank([]), reason: emptyReason(tt, req) }
+  if (trips.length === 0) return { itineraries: [], ranking: rank([]), ...whyEmpty(tt, req, day, today) }
   const leaveMs = req.departure.getTime()
   const soonest = trips.reduce((a, b) => (Date.parse(b.end) < Date.parse(a.end) ? b : a))
   const fastestMs = Date.parse(soonest.end) - leaveMs
@@ -109,16 +116,38 @@ export function premiumRoutes(tt: Timetable): Set<number> {
   )
 }
 
-/** Tells a rider whether to move a pin (no stop in walking reach) or try another time. */
-function emptyReason(tt: Timetable, req: PlanRequest): NonNullable<Plan['reason']> {
-  if (nearby(tt, req.from, DEFAULT_SEARCH).length === 0) return 'far-from-origin'
-  if (nearby(tt, req.to, DEFAULT_SEARCH).length === 0) return 'far-from-destination'
-  return 'no-trip'
+/**
+ * Why a plan came out empty, so the rider knows whether to move a pin or pick
+ * another time: no stop in reach of an end, no bus near an end that day, or no
+ * trip. On a day without buses, also the next day with buses near both ends,
+ * among every stop within FAR_WALK_M: the default search walks that far
+ * whenever the nearer ones are off.
+ */
+function whyEmpty(tt: Timetable, req: PlanRequest, day: WibDay, today: Uint8Array): Pick<Plan, 'reason' | 'nextServiceDate'> {
+  const from = nearby(tt, req.from, DEFAULT_SEARCH, today)
+  const to = nearby(tt, req.to, DEFAULT_SEARCH, today)
+  if (from.length === 0) return { reason: 'far-from-origin' }
+  if (to.length === 0) return { reason: 'far-from-destination' }
+  const runs = (stops: StopWalk[], active: Uint8Array) => stops.some((s) => tt.runsAt(s.stop, active))
+  const reason = !runs(from, today) ? 'no-service-near-origin' : !runs(to, today) ? 'no-service-near-destination' : null
+  if (!reason) return { reason: 'no-trip' }
+  const fromFar = tt.stopsNear(req.from.lat, req.from.lon, FAR_WALK_M)
+  const toFar = tt.stopsNear(req.to.lat, req.to.lon, FAR_WALK_M)
+  for (let delta = 1; delta <= NEXT_SERVICE_DAYS; delta++) {
+    const d = addDays(day, delta)
+    const active = tt.activeServices(d.ymd, d.weekday)
+    if (runs(fromFar, active) && runs(toFar, active)) {
+      return { reason, nextServiceDate: String(d.ymd).replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') }
+    }
+  }
+  return { reason }
 }
 
-function nearby(tt: Timetable, p: Place, s: Search): StopWalk[] {
+/** Stops within the search's walk of `p`. The default search walks further when none of them has a bus that day. */
+function nearby(tt: Timetable, p: Place, s: Search, today: Uint8Array): StopWalk[] {
   const stops = tt.stopsNear(p.lat, p.lon, s.maxWalkM)
-  return stops.length > 0 || s !== DEFAULT_SEARCH ? stops : tt.stopsNear(p.lat, p.lon, FAR_WALK_M)
+  if (s !== DEFAULT_SEARCH || stops.some((st) => tt.runsAt(st.stop, today))) return stops
+  return tt.stopsNear(p.lat, p.lon, FAR_WALK_M)
 }
 
 type Option = {

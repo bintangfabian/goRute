@@ -69,6 +69,7 @@ type PanelProps = {
 export function DeparturePanel({ id, open, value, onChange, onClose }: PanelProps) {
   const minute = useMinute()
   const today = wibDay(minute)
+  const offered = DEPARTURE_DAYS.map((day) => ({ ...day, ymd: addDays(today, day.offset).ymd }))
   const d = describe(value, minute)
   return (
     <AnimatePresence initial={false}>
@@ -91,21 +92,24 @@ export function DeparturePanel({ id, open, value, onChange, onClose }: PanelProp
             >
               Sekarang
             </Choice>
-            {DEPARTURE_DAYS.map((day) => {
-              const ymd = addDays(today, day.offset).ymd
-              return (
-                <Choice
-                  key={day.offset}
-                  pressed={value?.ymd === ymd}
-                  // A first pick starts at the current minute, so "Besok" alone means this time tomorrow.
-                  onClick={() => {
-                    if (value?.ymd !== ymd) onChange({ ymd, clock: value?.clock ?? wibClock(minute) })
-                  }}
-                >
-                  {day.label}
-                </Choice>
-              )
-            })}
+            {offered.map((day) => (
+              <Choice
+                key={day.offset}
+                pressed={value?.ymd === day.ymd}
+                // A first pick starts at the current minute, so "Besok" alone means this time tomorrow.
+                onClick={() => {
+                  if (value?.ymd !== day.ymd) onChange({ ymd: day.ymd, clock: value?.clock ?? wibClock(minute) })
+                }}
+              >
+                {day.label}
+              </Choice>
+            ))}
+            {/* A day the chips do not offer, such as Monday picked from "Cari untuk Senin" on a Saturday. */}
+            {d && !offered.some((day) => day.ymd === value?.ymd) && (
+              <Choice pressed onClick={() => {}}>
+                {d.day}
+              </Choice>
+            )}
             {value && (
               <input
                 type="time"
