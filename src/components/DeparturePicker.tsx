@@ -11,6 +11,10 @@ type Props = {
   onChange: (value: PickedTime | null) => void
 }
 
+// A pick only counts as gone by once it is this far behind the clock, so "Hari ini" left at the
+// current minute does not turn amber while the rider is still choosing the trip.
+const PAST_GRACE_MS = 5 * 60_000
+
 export function DeparturePicker({ value, onChange }: Props) {
   const [open, setOpen] = useState(false)
   const panelId = useId()
@@ -99,7 +103,7 @@ function describe(value: PickedTime | null, minute: number) {
   return {
     summary: `${days === 0 ? 'hari ini' : formatDay(ms, days)} ${value.clock.replace(':', '.')}`,
     // "Hari ini 08.00" picked at 10.00, or a pick whose day has gone by, plans a trip in the past.
-    past: ms < minute,
+    past: ms < minute - PAST_GRACE_MS,
   }
 }
 
