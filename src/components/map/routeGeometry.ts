@@ -3,7 +3,7 @@ import type { Leg } from '../../lib/api/client'
 
 type Coord = [number, number] // [lon, lat]
 
-export type RouteFeatureProps = { kind: 'walk' | 'transit' | 'stop'; color: string }
+export type RouteFeatureProps = { kind: 'walk' | 'transit' | 'stop'; color: string; dim: boolean }
 
 const TRANSIT_FALLBACK_COLOR = '#334155'
 
@@ -43,31 +43,36 @@ function sliceLeg(m: MeasuredLeg, distance: number): Coord[] {
 }
 
 // Route drawn up to `progress` (0..1). Board and alight points of transit
-// legs appear once the line reaches them.
-export function routeAt(route: MeasuredRoute, progress: number): FeatureCollection<LineString | Point, RouteFeatureProps> {
+// legs appear once the line reaches them. With `focus`, other legs are marked dim.
+export function routeAt(
+  route: MeasuredRoute,
+  progress: number,
+  focus: number | null = null,
+): FeatureCollection<LineString | Point, RouteFeatureProps> {
   const reached = progress * route.total
   const features: Feature<LineString | Point, RouteFeatureProps>[] = []
 
-  for (const m of route.legs) {
-    if (m.coords.length < 2 || m.start > reached) continue
+  route.legs.forEach((m, i) => {
+    if (m.coords.length < 2 || m.start > reached) return
     const transit = m.leg.route !== null
     const color = transit ? m.leg.route?.color || TRANSIT_FALLBACK_COLOR : '#64748b'
+    const dim = focus !== null && focus !== i
     const coords = sliceLeg(m, reached - m.start)
     features.push({
       type: 'Feature',
-      properties: { kind: transit ? 'transit' : 'walk', color },
+      properties: { kind: transit ? 'transit' : 'walk', color, dim },
       geometry: { type: 'LineString', coordinates: coords },
     })
     if (transit) {
-      features.push(stop(m.coords[0], color))
-      if (reached >= m.start + m.length) features.push(stop(m.coords[m.coords.length - 1], color))
+      features.push(stop(m.coords[0], color, dim))
+      if (reached >= m.start + m.length) features.push(stop(m.coords[m.coords.length - 1], color, dim))
     }
-  }
+  })
   return { type: 'FeatureCollection', features }
 }
 
-function stop(coord: Coord, color: string): Feature<Point, RouteFeatureProps> {
-  return { type: 'Feature', properties: { kind: 'stop', color }, geometry: { type: 'Point', coordinates: coord } }
+function stop(coord: Coord, color: string, dim: boolean): Feature<Point, RouteFeatureProps> {
+  return { type: 'Feature', properties: { kind: 'stop', color, dim }, geometry: { type: 'Point', coordinates: coord } }
 }
 
 export function routeBounds(legs: Leg[]): [[number, number], [number, number]] | null {

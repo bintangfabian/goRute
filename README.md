@@ -18,7 +18,7 @@ goRute/
 │   ├── stops.ts            # pencarian halte dari timetable (instan, plus alias seperti Monas, GBK)
 │   ├── places.ts           # pencarian tempat dari indeks OSM sendiri (instan)
 │   └── geocode.ts          # Photon publik, cadangan pencarian tempat
-├── shared/                 # tipe API, area layanan & hitungan jam WIB, dipakai web dan server
+├── shared/                 # tipe API, area layanan, hitungan jam WIB & teks petunjuk arah, dipakai web dan server
 ├── src/                    # PWA: React + Vite + Tailwind + Motion + MapLibre
 │   └── components/         # termasuk logo, ikon, dan ilustrasi beranimasi (illustrations.tsx)
 ├── public/favicon.svg      # master logo; ikon PWA & Apple dibuat dari sini (pwa-assets.config.ts)
@@ -87,6 +87,8 @@ Bentuk respons ada di `shared/api.ts`.
 - **Ilustrasi & animasi**: tiap keadaan panel (siap cari, belum ada bus, bus di sekitar libur hari itu, halte terlalu jauh, server gagal, asal = tujuan) punya ilustrasi SVG beranimasi. Di layar pendek, keadaan yang punya tombol (Coba lagi, Cari untuk Senin) mengecilkan atau menyembunyikan ilustrasinya dan boleh memakai panel lebih tinggi supaya tombolnya tetap terlihat. Semua animasi mengikuti setelan *reduce motion*.
 - **Gambar share** `public/og-image.png` (1200×630) dipakai tag Open Graph. Ganti `og:image` di `index.html` ke URL absolut setelah domain produksi ada.
 - **Tata letak**: *bottom sheet* di HP (ketuk atau geser pegangannya untuk membesarkan) dan panel kiri di layar ≥1024 px.
+- **Detail rute**: ketuk kartu opsi untuk membuka langkah-langkahnya: jalan kaki (jarak, waktu, jalan yang dilewati, petunjuk belok), naik bus (layanan, nomor rute, arah, jumlah halte, tarif, cara bayar), transit, dan tiba. Ketuk satu langkah untuk memperbesar peta ke bagian itu. Tombol kembali HP (atau gestur geser di iOS) dan Esc menutup detail.
+- **Ikon**: satu keluarga di `src/components/icons.tsx` (garis 1,8, ujung bulat, isian tipis), termasuk panah belok, penyeberangan, JPO, tangga, halte, dan ikon kategori tempat di saran pencarian.
 
 ## Sumber data
 

@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import { api, type PlaceResult } from '../lib/api/client'
 
 const DEBOUNCE_MS = 250
-// The geocoder is slow and keeps a function waiting for seconds, so it is
-// only asked once typing pauses, for queries long enough to mean something.
-const PLACES_DEBOUNCE_MS = 700
+// Places come from our own index and answer as fast as haltes; they wait for
+// a few letters so "ja" is not every Jalan in Jabodetabek.
 const PLACES_MIN_LENGTH = 3
 const MAX_SHOWN = 6
 
@@ -14,13 +13,15 @@ export type PlaceSearch = {
   error: string | null
 }
 
-// Haltes come from our own timetable and answer at once. Places from the
-// geocoder can take seconds or fail, so they join the list when they arrive.
+// Haltes and places come from two endpoints; each joins the list when it arrives.
 type Answers = { q: string; stops: PlaceResult[] | null; places: PlaceResult[] | null; error: string | null }
 
-export function usePlaceSearch(query: string): PlaceSearch {
+/** `near` is the other end of the trip, if chosen: places near it come first. */
+export function usePlaceSearch(query: string, near: { lat: number; lon: number } | null = null): PlaceSearch {
   const q = query.trim()
   const active = q.length >= 2
+  // A string, so a new object for the same spot does not search again.
+  const nearKey = near ? `${near.lat.toFixed(2)},${near.lon.toFixed(2)}` : null
   const asksGeocoder = q.length >= PLACES_MIN_LENGTH
   // Results stay visible while the next query loads, so the list does not flicker.
   const [answers, setAnswers] = useState<Answers>({ q: '', stops: [], places: [], error: null })
@@ -41,18 +42,18 @@ export function usePlaceSearch(query: string): PlaceSearch {
     const placesTimer = setTimeout(() => {
       if (q.length < PLACES_MIN_LENGTH) return
       api
-        .places(q, controller.signal)
+        .places(q, nearKey ? { lat: Number(nearKey.split(',')[0]), lon: Number(nearKey.split(',')[1]) } : null, controller.signal)
         .then(({ data, error }) => settle({ places: data?.places ?? [], error: error ?? null }))
         .catch(() => {
           if (!controller.signal.aborted) settle({ places: [], error: 'Server tidak bisa dihubungi.' })
         })
-    }, PLACES_DEBOUNCE_MS)
+    }, DEBOUNCE_MS)
     return () => {
       clearTimeout(stopsTimer)
       clearTimeout(placesTimer)
       controller.abort()
     }
-  }, [q, active])
+  }, [q, active, nearKey])
 
   if (!active) return { places: [], loading: false, error: null }
   // Older results only stand in while the rider keeps typing the same word ("mon" → "monas");

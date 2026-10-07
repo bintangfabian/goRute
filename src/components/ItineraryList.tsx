@@ -1,14 +1,12 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { Fragment } from 'react'
-import { daysBetween } from '../../shared/time.ts'
+import { Fragment, useEffect, useRef } from 'react'
 import { useMinute } from '../hooks/useMinute'
 import type { Itinerary, Leg, Plan } from '../lib/api/client'
-import { formatClock, formatDay, formatDistance, formatDuration, formatRupiah } from '../lib/format'
-import { PREFERENCES, type PickedTime, type Preference } from '../lib/trip'
+import { formatClock, formatDistance, formatDuration, formatRupiah } from '../lib/format'
+import { bestAt, lateStart } from '../lib/itinerary'
+import type { PickedTime, Preference } from '../lib/trip'
 import { BusIcon, ChevronIcon, TrainIcon, WalkIcon } from './icons'
-
-// A trip that starts this long after it was asked for says so, or it reads like one leaving now.
-const LATE_START_SEC = 30 * 60
+import { readableOn } from './routeColors'
 
 type Props = {
   plan: Plan
@@ -18,17 +16,25 @@ type Props = {
   picked: PickedTime | null
   preference: Preference
   selectedId: string | null
-  onSelect: (id: string) => void
+  /** A card was tapped: show the option on the map and open its details. */
+  onOpen: (id: string) => void
+  /** Back from an option's details: put keyboard focus on its card again. */
+  refocus?: boolean
 }
 
-export function ItineraryList({ plan, departure, picked, preference, selectedId, onSelect }: Props) {
+export function ItineraryList({ plan, departure, picked, preference, selectedId, onOpen, refocus = false }: Props) {
+  const list = useRef<HTMLUListElement>(null)
+  useEffect(() => {
+    if (refocus) list.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus()
+  }, [refocus])
   // "besok" on a label follows the clock, so it reads right after midnight too.
   const minute = useMinute()
   const byId = new Map(plan.itineraries.map((it) => [it.id, it]))
   const ordered = plan.ranking[preference].flatMap((id) => byId.get(id) ?? [])
 
   return (
-    <ul className="flex flex-col gap-2.5">
+    // The top padding leaves room for the first card's focus ring inside the scrolling list.
+    <ul ref={list} className="flex flex-col gap-2.5 pt-1">
       <AnimatePresence initial={false}>
         {ordered.map((it, i) => (
           <motion.li
@@ -42,9 +48,9 @@ export function ItineraryList({ plan, departure, picked, preference, selectedId,
             <ItineraryCard
               itinerary={it}
               lateStart={lateStart(it, departure, picked, minute)}
-              winsAt={PREFERENCES.filter((p) => plan.ranking[p.id][0] === it.id).map((p) => p.label)}
+              winsAt={bestAt(plan, it.id)}
               selected={it.id === selectedId}
-              onSelect={() => onSelect(it.id)}
+              onOpen={() => onOpen(it.id)}
             />
           </motion.li>
         ))}
@@ -53,33 +59,21 @@ export function ItineraryList({ plan, departure, picked, preference, selectedId,
   )
 }
 
-// From a picked time, "Berangkat 9 j 36 mnt lagi" would read as counting from now, and a
-// bus on another day (the first one tomorrow) is easier to place by its day and clock, so
-// those labels name them instead.
-function lateStart(it: Itinerary, departure: number, picked: PickedTime | null, minute: number) {
-  const startMs = Date.parse(it.start)
-  const sec = (startMs - departure) / 1000
-  if (sec < LATE_START_SEC) return null
-  const days = daysBetween(minute, startMs)
-  if (!picked && days === 0) return `Berangkat ${formatDuration(sec)} lagi`
-  return ['Berangkat', formatDay(startMs, days), formatClock(it.start)].filter(Boolean).join(' ')
-}
-
 function ItineraryCard(props: {
   itinerary: Itinerary
   lateStart: string | null
   winsAt: string[]
   selected: boolean
-  onSelect: () => void
+  onOpen: () => void
 }) {
   const { itinerary: it, lateStart, winsAt, selected } = props
   return (
     <motion.button
       type="button"
       aria-pressed={selected}
-      onClick={props.onSelect}
+      aria-description="Buka detail rute"
+      onClick={props.onOpen}
       whileTap={{ scale: 0.98 }}
-      animate={{ y: selected ? -1 : 0 }}
       className={`w-full rounded-2xl border-2 p-4 text-left transition-[border-color,background-color,box-shadow] focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none ${
         selected
           ? 'border-brand bg-brand-soft/40 shadow-[0_6px_20px_-10px_rgb(15,118,110,0.5)]'
@@ -111,15 +105,17 @@ function ItineraryCard(props: {
 
       <LegStrip legs={it.legs} />
 
-      {winsAt.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {winsAt.map((label) => (
-            <span key={label} className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-white">
-              {label}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="mt-3 flex items-center gap-1.5">
+        {winsAt.map((label) => (
+          <span key={label} className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-white">
+            {label}
+          </span>
+        ))}
+        <span className="ml-auto flex items-center gap-0.5 text-xs font-semibold text-brand">
+          Lihat detail
+          <ChevronIcon className="size-3.5" />
+        </span>
+      </div>
     </motion.button>
   )
 }
@@ -160,25 +156,4 @@ function LegChip({ leg }: { leg: Leg }) {
       {leg.route.shortName}
     </span>
   )
-}
-
-// Feed colours are kept, but some pair white text with a light route colour
-// (9A, 9D: under 3:1). Below WCAG's 4.5:1, use whichever of white or ink reads better.
-function readableOn(background: string, text: string): string {
-  if (!/^#[0-9a-f]{6}$/i.test(background) || !/^#[0-9a-f]{6}$/i.test(text)) return text
-  if (contrast(background, text) >= 4.5) return text
-  return contrast(background, '#ffffff') >= contrast(background, '#0f172a') ? '#ffffff' : '#0f172a'
-}
-
-function contrast(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
-  return (hi + 0.05) / (lo + 0.05)
-}
-
-function luminance(hex: string): number {
-  const [r, g, b] = [1, 3, 5].map((i) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  })
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }

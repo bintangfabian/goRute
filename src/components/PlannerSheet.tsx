@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion, type PanInfo } from 'motion/react'
-import { useId, useState, type ReactNode, type Ref } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from 'react'
 import { wibClock, wibTime } from '../../shared/time.ts'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import type { PlanState } from '../hooks/usePlan'
@@ -10,7 +10,10 @@ import { BrandBar } from './BrandBar'
 import { DepartureButton, DeparturePanel } from './DeparturePicker'
 import { ClockIcon, RefreshIcon, SwapIcon } from './icons'
 import { FarArt, NoTripArt, OffDayArt, OfflineArt, ReadyArt, SamePlaceArt } from './illustrations'
+import { bestAt } from '../lib/itinerary'
 import { ItineraryList } from './ItineraryList'
+import type { Itinerary, Plan } from '../lib/api/client'
+import { RouteDetail } from './RouteDetail'
 import { MapAttribution } from './map/MapView'
 import { PlaceField } from './PlaceField'
 import { PreferenceTabs } from './PreferenceTabs'
@@ -32,6 +35,9 @@ type Props = {
   onRetry: () => void
   selectedId: string | null
   onSelect: (id: string) => void
+  /** The leg of the shown option the map is zoomed to, if any. */
+  focusLeg: number | null
+  onFocusLeg: (leg: number | null, of: Itinerary | null) => void
 }
 
 // A bottom sheet on phones (tap or swipe the handle to grow it), a panel on the left on wide screens.
@@ -55,6 +61,50 @@ export function PlannerSheet(props: Props) {
     setExpanded(now)
   }
   const searching = editing && !wide
+
+  // An option's details replace the fields and the list. They belong to the plan they
+  // were opened from, so a new search (another time, another place) closes them.
+  const [detailFor, setDetailFor] = useState<Plan | null>(null)
+  // Set when the details close, so the list puts focus back on the card that opened them.
+  const [cameBack, setCameBack] = useState(false)
+  const ready = plan.kind === 'ready' ? plan : null
+  const selected = ready?.plan.itineraries.find((it) => it.id === props.selectedId) ?? null
+  const detail = ready && selected && detailFor === ready.plan ? selected : null
+  const { onFocusLeg } = props
+  const openDetail = (id: string) => {
+    setCameBack(false)
+    props.onSelect(id)
+    onFocusLeg(null, null)
+    setDetailFor(ready?.plan ?? null)
+  }
+  // The history entry pushed for the open details, marked so a stale one (after a reload) is never mistaken for it.
+  const entry = useRef('')
+  const ownEntry = () => entry.current !== '' && history.state?.goruteDetail === entry.current
+  // The back entry added below is popped, so the browser's own back does the closing.
+  const closeDetail = () => {
+    onFocusLeg(null, null)
+    if (ownEntry()) history.back()
+    else {
+      setDetailFor(null)
+      setCameBack(true)
+    }
+  }
+  const detailOpen = detail !== null
+  useEffect(() => {
+    if (!detailOpen) return
+    // A phone's back button or a swipe back closes the details instead of leaving goRute.
+    if (!ownEntry()) {
+      entry.current = crypto.randomUUID()
+      history.pushState({ goruteDetail: entry.current }, '')
+    }
+    const onPop = () => {
+      onFocusLeg(null, null)
+      setDetailFor(null)
+      setCameBack(true)
+    }
+    addEventListener('popstate', onPop)
+    return () => removeEventListener('popstate', onPop)
+  }, [detailOpen, onFocusLeg])
   // A message with a button (Coba lagi, Cari untuk Senin) may take more of a short phone,
   // so the button stays in view; everything else leaves that room to the map.
   const withButton =
@@ -66,6 +116,9 @@ export function PlannerSheet(props: Props) {
     <motion.section
       ref={ref}
       aria-label="Perencana rute"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && detail) closeDetail()
+      }}
       initial={wide ? { x: '-110%' } : { y: '100%' }}
       animate={{ x: 0, y: 0 }}
       transition={{ type: 'spring', stiffness: 260, damping: 30, delay: 0.2 }}
@@ -90,7 +143,7 @@ export function PlannerSheet(props: Props) {
         </motion.button>
       )}
 
-      <div className="px-5 pt-2 lg:pt-4">
+      <div className={`px-5 pt-2 lg:pt-4 ${detail ? 'hidden' : ''}`}>
         <div className="flex items-center gap-2">
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <PlaceField
@@ -98,6 +151,7 @@ export function PlannerSheet(props: Props) {
               value={origin}
               onChange={props.onOriginChange}
               onEditing={onEditing}
+              near={destination}
               placeholder="Dari mana?"
             />
             <PlaceField
@@ -105,6 +159,7 @@ export function PlannerSheet(props: Props) {
               value={destination}
               onChange={props.onDestinationChange}
               onEditing={onEditing}
+              near={origin}
               placeholder="Mau ke mana?"
             />
           </div>
@@ -153,14 +208,30 @@ export function PlannerSheet(props: Props) {
         </AnimatePresence>
       </div>
 
-      {/* Focusable, so keyboard users can scroll it when the results outgrow the sheet. */}
+      {/* Focusable, so keyboard users can scroll it when the results outgrow the sheet. Keyed, so
+          opening or closing the details starts at the top. */}
       <div
+        key={detail ? 'detail' : 'list'}
         tabIndex={0}
         role="region"
-        aria-label="Hasil rute"
-        className={`mt-3 min-h-0 flex-1 overflow-y-auto px-5 pb-3 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none focus-visible:ring-inset ${searching ? 'invisible' : ''}`}
+        aria-label={detail ? 'Detail rute' : 'Hasil rute'}
+        className={`min-h-0 flex-1 overflow-y-auto px-5 pb-3 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none focus-visible:ring-inset ${detail ? 'pt-1 lg:pt-3' : 'mt-3'} ${searching ? 'invisible' : ''}`}
       >
-        <Results {...props} />
+        {detail && ready ? (
+          <RouteDetail
+            itinerary={detail}
+            originName={origin?.name ?? 'Asal'}
+            destinationName={destination?.name ?? 'Tujuan'}
+            departure={ready.departure}
+            picked={ready.picked}
+            winsAt={bestAt(ready.plan, detail.id)}
+            focus={props.focusLeg}
+            onFocus={(leg) => onFocusLeg(leg, detail)}
+            onBack={closeDetail}
+          />
+        ) : (
+          <Results {...props} onOpen={openDetail} refocus={cameBack} />
+        )}
       </div>
       <footer className="border-t border-slate-100 px-5 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <MapAttribution />
@@ -169,7 +240,7 @@ export function PlannerSheet(props: Props) {
   )
 }
 
-function Results(props: Props) {
+function Results(props: Props & { onOpen: (id: string) => void; refocus: boolean }) {
   const { plan, origin, destination } = props
   if (props.samePlace) {
     return (
@@ -226,7 +297,8 @@ function Results(props: Props) {
             picked={plan.picked}
             preference={props.preference}
             selectedId={props.selectedId}
-            onSelect={props.onSelect}
+            onOpen={props.onOpen}
+            refocus={props.refocus}
           />
         </>
       )

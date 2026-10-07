@@ -1,6 +1,6 @@
 import type { ApiError, Plan, PlaceResult, Status } from '../../../shared/api.ts'
 
-export type { Itinerary, Leg, Plan, PlaceResult, Status } from '../../../shared/api.ts'
+export type { Itinerary, Leg, Plan, PlaceResult, Status, WalkStep } from '../../../shared/api.ts'
 
 export type Result<T> = { data: T; error?: undefined } | { data?: undefined; error: string }
 
@@ -28,6 +28,12 @@ export type PlanQuery = {
 export const api = {
   status: (signal?: AbortSignal) => get<Status>('/api/v1/status', {}, signal),
   plan: (query: PlanQuery, signal?: AbortSignal) => get<Plan>('/api/v1/plan', query, signal),
-  places: (q: string, signal?: AbortSignal) => get<{ places: PlaceResult[] }>('/api/v1/places', { q }, signal),
+  /** `near` (the other end of the trip) puts nearby places first; rounded so the CDN can share answers. */
+  places: (q: string, near: { lat: number; lon: number } | null, signal?: AbortSignal) =>
+    get<{ places: PlaceResult[] }>(
+      '/api/v1/places',
+      near ? { q, lat: near.lat.toFixed(2), lon: near.lon.toFixed(2) } : { q },
+      signal,
+    ),
   stops: (q: string, signal?: AbortSignal) => get<{ places: PlaceResult[] }>('/api/v1/stops', { q }, signal),
 }
