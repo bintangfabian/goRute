@@ -18,7 +18,8 @@ createRoot(document.getElementById('root')!).render(
 
 // The splash in index.html covers the page until the app has drawn, long enough for
 // its logo animation to finish. Timers rather than animation frames, so a page opened
-// in a background tab still lets go of it.
+// in a background tab still lets go of it. If this never runs, the splash steps aside
+// by itself after 10 s and uncovers the note in #root that rendering the app replaces.
 const splash = document.getElementById('splash')
 if (splash) {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches

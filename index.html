@@ -19,7 +19,11 @@
     <meta name="twitter:card" content="summary_large_image" />
     <title>goRute · Rute transportasi umum Jabodetabek</title>
     <style>
-      /* Splash: shown before the app's JavaScript loads, removed by src/main.tsx. */
+      /*
+       * Splash: shown before the app's JavaScript loads, removed by src/main.tsx.
+       * When that never runs (no network on the first visit, a browser too old
+       * for the app), it steps aside after 10 s for the note in #root.
+       */
       #splash {
         position: fixed;
         inset: 0;
@@ -30,6 +34,7 @@
         transition:
           opacity 0.4s ease,
           visibility 0.4s;
+        animation: splash-give-up 0.4s ease 10s forwards;
       }
       #splash.done {
         opacity: 0;
@@ -107,10 +112,69 @@
           transform: none;
         }
       }
+      @keyframes splash-give-up {
+        to {
+          opacity: 0;
+          visibility: hidden;
+        }
+      }
+      /* The note in #root, which the app replaces as soon as it draws. */
+      .boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 10px;
+        padding: 24px;
+        background: #0f766e;
+        color: #ccfbf1;
+        font: 15px/1.5 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, sans-serif;
+        text-align: center;
+        visibility: hidden;
+        opacity: 0;
+        animation: boot-show 0.4s ease 10s forwards;
+      }
+      .boot svg {
+        width: 72px;
+        height: 72px;
+        margin-bottom: 6px;
+      }
+      .boot p {
+        max-width: 320px;
+        margin: 0;
+      }
+      .boot .title {
+        color: #fff;
+        font-size: 20px;
+        font-weight: 800;
+      }
+      .boot a {
+        margin-top: 10px;
+        padding: 10px 22px;
+        border-radius: 999px;
+        background: #fff;
+        color: #0f766e;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .boot a:focus-visible {
+        outline: 3px solid #fbbf24;
+        outline-offset: 3px;
+      }
+      @keyframes boot-show {
+        to {
+          visibility: visible;
+          opacity: 1;
+        }
+      }
       @media (prefers-reduced-motion: reduce) {
-        #splash *,
-        #splash {
+        /* Still fade the splash out when it gives up: only the logo stops moving. */
+        #splash * {
           animation: none !important;
+        }
+        #splash,
+        #splash * {
           transition: none !important;
         }
         #splash .route {
@@ -124,6 +188,20 @@
         }
       }
     </style>
+    <noscript>
+      <style>
+        /* Without JavaScript there is nothing to wait for. */
+        #splash,
+        .boot .net {
+          display: none;
+        }
+        .boot {
+          visibility: visible;
+          opacity: 1;
+          animation: none;
+        }
+      </style>
+    </noscript>
   </head>
   <body>
     <div id="splash" aria-hidden="true">
@@ -138,7 +216,24 @@
         <div class="word"><b>go</b>Rute</div>
       </div>
     </div>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot">
+        <svg viewBox="0 0 256 256" aria-hidden="true">
+          <path
+            fill="#fff"
+            d="M61 88A68 68 0 1 1 197 88A68 68 0 1 1 61 88Z M97 88A32 32 0 1 0 161 88A32 32 0 1 0 97 88Z M161 38A18 18 0 0 1 197 38V152A68 68 0 0 1 129 220H111V184H129A32 32 0 0 0 161 152Z"
+          />
+          <path fill="#fbbf24" d="M59 202A30 30 0 1 1 119 202A30 30 0 1 1 59 202Z M78 202A11 11 0 1 0 100 202A11 11 0 1 0 78 202Z" />
+        </svg>
+        <p class="title">goRute belum terbuka</p>
+        <p class="net">
+          Koneksi mungkin lambat atau terputus. Tunggu sebentar atau muat ulang. Kalau tetap begini, perbarui browser atau
+          coba browser lain.
+        </p>
+        <noscript><p>goRute butuh JavaScript. Aktifkan JavaScript di browser ini, lalu muat ulang.</p></noscript>
+        <a href="">Muat ulang</a>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
