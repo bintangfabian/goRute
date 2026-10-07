@@ -132,6 +132,13 @@ export class Timetable {
       return ymd >= s.start && ymd <= s.end && s.days & (1 << weekday) ? 1 : 0
     })
   }
+
+  /** Whether any trip calls at the stop on a day, given that day's activeServices. */
+  runsAt(stop: number, active: Uint8Array): boolean {
+    const sp = this.stopPatterns[stop]
+    for (let i = 0; i < sp.length; i += 2) if (this.patterns[sp[i]].services.some((s) => active[s] === 1)) return true
+    return false
+  }
 }
 
 const cellKey = (y: number, x: number) => y * 100_000 + x

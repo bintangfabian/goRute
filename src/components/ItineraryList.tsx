@@ -53,15 +53,16 @@ export function ItineraryList({ plan, departure, picked, preference, selectedId,
   )
 }
 
-// From a picked time, "Berangkat 9 j 36 mnt lagi" would read as counting from now,
-// so the label names the clock time instead.
+// From a picked time, "Berangkat 9 j 36 mnt lagi" would read as counting from now, and a
+// bus on another day (the first one tomorrow) is easier to place by its day and clock, so
+// those labels name them instead.
 function lateStart(it: Itinerary, departure: number, picked: PickedTime | null, minute: number) {
   const startMs = Date.parse(it.start)
   const sec = (startMs - departure) / 1000
   if (sec < LATE_START_SEC) return null
-  if (!picked) return `Berangkat ${formatDuration(sec)} lagi`
-  const day = formatDay(startMs, daysBetween(minute, startMs))
-  return ['Berangkat', day, formatClock(it.start)].filter(Boolean).join(' ')
+  const days = daysBetween(minute, startMs)
+  if (!picked && days === 0) return `Berangkat ${formatDuration(sec)} lagi`
+  return ['Berangkat', formatDay(startMs, days), formatClock(it.start)].filter(Boolean).join(' ')
 }
 
 function ItineraryCard(props: {

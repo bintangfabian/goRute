@@ -58,29 +58,46 @@ function Road({ moving }: { moving: boolean }) {
   )
 }
 
-function Wheel({ cx }: { cx: number }) {
-  return (
-    <Loop animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} spin>
+function Wheel({ cx, still = false }: { cx: number; still?: boolean }) {
+  const wheel = (
+    <>
       <circle cx={cx} cy="88" r="6.5" fill={INK} />
       <circle cx={cx} cy="88" r="2.4" fill={LINE} />
       <path d={`M${cx} 82.5v3M${cx} 90.5v3M${cx - 5.5} 88h3M${cx + 2.5} 88h3`} stroke={LINE} strokeWidth="1.2" />
+    </>
+  )
+  if (still) return <g>{wheel}</g>
+  return (
+    <Loop animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }} spin>
+      {wheel}
     </Loop>
   )
 }
 
-function Bus({ x = 62 }: { x?: number }) {
+/** A bus on the move, or parked with its lights off. */
+function Bus({ x = 62, parked = false }: { x?: number; parked?: boolean }) {
+  const glass = parked ? TEAL_DARK : TEAL_SOFT
+  const body = (
+    <>
+      <rect x={x} y="58" width="60" height="28" rx="8" fill={TEAL} />
+      <rect x={x + 6} y="64" width="12" height="10" rx="2.5" fill={glass} />
+      <rect x={x + 21} y="64" width="12" height="10" rx="2.5" fill={glass} />
+      <rect x={x + 36} y="64" width="18" height="10" rx="2.5" fill={glass} />
+      <rect x={x} y="78" width="60" height="3.5" fill={TEAL_DARK} />
+      <circle cx={x + 56} cy="83" r="2" fill={parked ? MUTED : AMBER} />
+    </>
+  )
   return (
     <g>
-      <Loop animate={{ y: [0, -1.2, 0] }} transition={forever(0.45)}>
-        <rect x={x} y="58" width="60" height="28" rx="8" fill={TEAL} />
-        <rect x={x + 6} y="64" width="12" height="10" rx="2.5" fill={TEAL_SOFT} />
-        <rect x={x + 21} y="64" width="12" height="10" rx="2.5" fill={TEAL_SOFT} />
-        <rect x={x + 36} y="64" width="18" height="10" rx="2.5" fill={TEAL_SOFT} />
-        <rect x={x} y="78" width="60" height="3.5" fill={TEAL_DARK} />
-        <circle cx={x + 56} cy="83" r="2" fill={AMBER} />
-      </Loop>
-      <Wheel cx={x + 14} />
-      <Wheel cx={x + 46} />
+      {parked ? (
+        <g>{body}</g>
+      ) : (
+        <Loop animate={{ y: [0, -1.2, 0] }} transition={forever(0.45)}>
+          {body}
+        </Loop>
+      )}
+      <Wheel cx={x + 14} still={parked} />
+      <Wheel cx={x + 46} still={parked} />
     </g>
   )
 }
@@ -144,6 +161,28 @@ export function NoTripArt() {
         <circle cx="152" cy="34" r="13" fill={AMBER} />
         <path d="M148 30.5a4 4 0 1 1 5.6 3.7c-1 .5-1.6 1.3-1.6 2.3" stroke={INK} strokeWidth="2.4" strokeLinecap="round" fill="none" />
         <circle cx="152" cy="40.5" r="1.5" fill={INK} />
+      </Loop>
+    </Scene>
+  )
+}
+
+/** The day crossed out on the calendar and the bus asleep: no bus runs near here that day. */
+export function OffDayArt() {
+  return (
+    <Scene label="Bus di sekitar sini sedang tidak beroperasi">
+      <ellipse cx="100" cy="100" rx="92" ry="14" fill={LINE} opacity="0.7" />
+      <rect x="26" y="32" width="48" height="54" rx="8" fill="#fff" stroke={MUTED} strokeWidth="2" />
+      <path d="M26 40a8 8 0 0 1 8-8h32a8 8 0 0 1 8 8v6H26Z" fill={TEAL} />
+      <path d="M38 27v10M62 27v10" stroke={INK} strokeWidth="3.5" strokeLinecap="round" />
+      <Loop animate={{ scale: [1, 1.12, 1] }} transition={forever(1.8)} spin>
+        <path d="M42 57l16 16M58 57L42 73" stroke={AMBER} strokeWidth="5" strokeLinecap="round" />
+      </Loop>
+      <Bus x={104} parked />
+      <Loop animate={{ y: [0, -10], opacity: [0, 1, 0] }} transition={forever(2.4)}>
+        <path d="M152 50h6l-6 7h6" stroke={TEAL} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      </Loop>
+      <Loop animate={{ y: [0, -10], opacity: [0, 1, 0] }} transition={forever(2.4, { delay: 1.2 })}>
+        <path d="M162 38h8l-8 9h8" stroke={TEAL} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
       </Loop>
     </Scene>
   )
