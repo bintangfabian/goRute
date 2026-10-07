@@ -7,7 +7,7 @@ import { raptor, type Journey, type ServiceDay, type StopWalk } from '../router/
 import { addDays, wibDay } from '../../shared/time.ts'
 import type { Pattern, Timetable } from '../timetable/timetable.ts'
 import { walkMeters, walkSeconds } from '../walk.ts'
-import { dominates, rank } from './rank.ts'
+import { keepDistinct, rank } from './rank.ts'
 
 export type PlanRequest = { from: Place; to: Place; departure: Date }
 
@@ -78,7 +78,7 @@ export function planTrip(tt: Timetable, req: PlanRequest): Plan {
   if (walk) options.push(walk)
 
   const trips = options.map((o) => o.itinerary)
-  if (trips.length === 0) return { itineraries: [], ranking: rank([]) }
+  if (trips.length === 0) return { itineraries: [], ranking: rank([]), reason: emptyReason(tt, req) }
   const leaveMs = req.departure.getTime()
   const soonest = trips.reduce((a, b) => (Date.parse(b.end) < Date.parse(a.end) ? b : a))
   const fastestMs = Date.parse(soonest.end) - leaveMs
@@ -87,10 +87,9 @@ export function planTrip(tt: Timetable, req: PlanRequest): Plan {
     const saved = it.fare.complete ? Math.max(0, soonest.fare.totalIdr - it.fare.totalIdr) : 0
     return leaveMs + fastestMs * MAX_SLOWDOWN + (SLOWDOWN_SLACK_SEC + (saved / RUPIAH_PER_MINUTE) * 60) * 1000
   }
-  const itineraries = trips
-    .filter((it) => Date.parse(it.end) <= limitMs(it))
-    .filter((it, _, all) => !all.some((other) => dominates(other, it)))
-    .map((it, i): Itinerary => ({ ...it, id: `r${i + 1}` }))
+  const itineraries = keepDistinct(trips.filter((it) => Date.parse(it.end) <= limitMs(it))).map(
+    (it, i): Itinerary => ({ ...it, id: `r${i + 1}` }),
+  )
   return { itineraries, ranking: rank(itineraries) }
 }
 
@@ -108,6 +107,13 @@ export function premiumRoutes(tt: Timetable): Set<number> {
   return new Set(
     tt.routes.flatMap((r, i) => (r.fare >= 0 && tt.fares[r.fare].price > (regular.get(feedOf(r.id)) ?? Infinity) ? [i] : [])),
   )
+}
+
+/** Tells a rider whether to move a pin (no stop in walking reach) or try another time. */
+function emptyReason(tt: Timetable, req: PlanRequest): NonNullable<Plan['reason']> {
+  if (nearby(tt, req.from, DEFAULT_SEARCH).length === 0) return 'far-from-origin'
+  if (nearby(tt, req.to, DEFAULT_SEARCH).length === 0) return 'far-from-destination'
+  return 'no-trip'
 }
 
 function nearby(tt: Timetable, p: Place, s: Search): StopWalk[] {
