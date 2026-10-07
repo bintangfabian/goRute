@@ -72,18 +72,35 @@ export function outshines(a: Trip, b: Trip): boolean {
   return noWorse && clearlyBetter
 }
 
+/** Earliest arrival first, then every other count the filter weighs, so only identical trips tie. */
+const compareSettle = (a: Trip, b: Trip) =>
+  Date.parse(a.end) - Date.parse(b.end) ||
+  a.durationSec - b.durationSec ||
+  a.transfers - b.transfers ||
+  a.walkDistanceM - b.walkDistanceM ||
+  a.fare.totalIdr - b.fare.totalIdr ||
+  Number(!a.fare.complete) - Number(!b.fare.complete)
+
 /**
- * Drops every option another kept one dominates or outshines. Kept options are
- * checked against each newcomer and the other way round, so the result never
- * holds a pair where one beats the other, and it is never empty.
+ * Drops every option another kept one dominates or outshines. Beating is not
+ * transitive: from Cibubur to Bundaran HI, P11 > 9D beats P11 > 9A > 6B, which
+ * beats the five minutes faster P11 > 9A > 6A, but 9D does not beat 6A. So
+ * options are settled in rounds: those nothing left beats stay, and whatever
+ * they beat goes. The result does not depend on the order options come in, is
+ * never empty, and holds no pair where one beats the other. Every option it
+ * drops is beaten by one it keeps, unless options beat each other in a circle.
  */
 export function keepDistinct<T extends Trip>(trips: T[]): T[] {
   const beats = (a: T, b: T) => dominates(a, b) || outshines(a, b)
-  const kept: T[] = []
-  for (const trip of trips) {
-    if (kept.some((k) => beats(k, trip))) continue
-    for (let i = kept.length - 1; i >= 0; i--) if (beats(trip, kept[i])) kept.splice(i, 1)
-    kept.push(trip)
+  const kept = new Set<T>()
+  let left = trips.toSorted(compareSettle)
+  while (left.length > 0) {
+    const free = left.filter((t) => !left.some((o) => beats(o, t)))
+    // The margins let three or more options beat each other in a circle. The
+    // earliest arrival breaks it, and the options it beats or loses to go.
+    const stay = free.length > 0 ? free : [left[0]]
+    for (const t of stay) kept.add(t)
+    left = left.filter((t) => !kept.has(t) && !stay.some((s) => beats(s, t) || beats(t, s)))
   }
-  return kept
+  return trips.filter((t) => kept.has(t))
 }

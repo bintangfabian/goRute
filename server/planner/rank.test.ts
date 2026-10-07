@@ -71,15 +71,59 @@ test('treats trips a few minutes apart as the same trip', () => {
   assert.equal(outshines({ ...viaNineD, fare: { totalIdr: 3500, complete: false } }, viaSixA), false)
 })
 
+const names = (trips: Itinerary[]) => trips.map((t) => t.id).sort()
+const orders = <T,>(xs: T[]): T[][] =>
+  xs.length <= 1 ? [xs] : xs.flatMap((x, i) => orders(xs.toSpliced(i, 1)).map((rest) => [x, ...rest]))
+const beats = (a: Itinerary, b: Itinerary) => dominates(a, b) || outshines(a, b)
+
 test('keeps one trip of each kind, whatever the order', () => {
   const sooner = { ...it('sooner', '12:01', 3500, 2, 422), durationSec: 118 * 60 }
-  const names = (trips: Itinerary[]) => trips.map((t) => t.id).sort()
-  for (const order of [
-    [viaSixA, viaSixB, viaNineD, sooner],
-    [viaNineD, sooner, viaSixB, viaSixA],
-    [sooner, viaSixA, viaNineD, viaSixB],
-  ]) {
+  for (const order of orders([viaSixA, viaSixB, viaNineD, sooner])) {
     assert.deepEqual(names(keepDistinct(order)), ['P11 > 9D', 'sooner'])
   }
   assert.deepEqual(keepDistinct([]), [])
+})
+
+test('keeps a trip whose only rival loses to a third', () => {
+  // Cibubur (-6.369, 106.893) → Bundaran HI at 17.00, all leaving at 17.01:
+  // 9D nearly copies 6B and 6B nearly copies 6A, but 6A is 5 min faster than 9D.
+  const nineD = { ...it('P11 > 9D', '12:13', 3500, 1, 305), durationSec: 7924 }
+  const sixB = { ...it('P11 > 9A > 6B', '12:11', 3500, 2, 409), durationSec: 7777 }
+  const sixA = { ...it('P11 > 9A > 6A', '12:08', 3500, 2, 675), durationSec: 7612 }
+  assert.ok(outshines(nineD, sixB) && outshines(sixB, sixA) && !beats(nineD, sixA))
+  for (const order of orders([nineD, sixB, sixA])) {
+    assert.deepEqual(names(keepDistinct(order)), ['P11 > 9A > 6A', 'P11 > 9D'])
+  }
+})
+
+test('breaks a circle of near copies at the earliest arrival', () => {
+  // Each is clearly ahead of the next on one count and within the margins on
+  // the rest: a walks 300 m less than b, b arrives 6 min before c, and c
+  // rides 6 min less than a.
+  const a = { ...it('a', '02:00', 3500, 1, 0), durationSec: 3600 }
+  const b = { ...it('b', '01:57', 3500, 1, 300), durationSec: 3420 }
+  const c = { ...it('c', '02:03', 3500, 1, 150), durationSec: 3240 }
+  assert.ok(outshines(a, b) && outshines(b, c) && outshines(c, a))
+  for (const order of orders([a, b, c])) assert.deepEqual(names(keepDistinct(order)), ['b'])
+})
+
+test('settles any set of trips the same way whatever the order', () => {
+  let seed = 1
+  const random = (n: number) => (seed = (seed * 48_271) % 2_147_483_647) % n
+  for (let round = 0; round < 1000; round++) {
+    // Minutes and a few hundred metres apart, so most trips nearly copy another.
+    const trips = Array.from({ length: 2 + random(7) }, (_, i) => ({
+      ...it(`t${i}`, `02:${String(random(11)).padStart(2, '0')}`, [3500, 3500, 3500, 7000][random(4)], random(2), random(9) * 50, random(10) > 0),
+      durationSec: (55 + random(11)) * 60,
+    }))
+    const kept = keepDistinct(trips)
+    assert.ok(kept.length > 0)
+    for (const a of kept) for (const b of kept) assert.ok(!beats(a, b), `${a.id} beats ${b.id}`)
+    // A dropped trip loses to a kept one, or beats it in a circle.
+    for (const t of trips) assert.ok(kept.includes(t) || kept.some((k) => beats(k, t) || beats(t, k)), `${t.id} dropped`)
+    const turn = random(trips.length)
+    for (const order of [trips.toReversed(), [...trips.slice(turn), ...trips.slice(0, turn)]]) {
+      assert.deepEqual(names(keepDistinct(order)), names(kept))
+    }
+  }
 })
