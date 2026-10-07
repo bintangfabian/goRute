@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { Fragment } from 'react'
 import { daysBetween } from '../../shared/time.ts'
+import { useMinute } from '../hooks/useMinute'
 import type { Itinerary, Leg, Plan } from '../lib/api/client'
 import { formatClock, formatDay, formatDistance, formatDuration, formatRupiah } from '../lib/format'
 import { PREFERENCES, type PickedTime, type Preference } from '../lib/trip'
@@ -21,6 +22,8 @@ type Props = {
 }
 
 export function ItineraryList({ plan, departure, picked, preference, selectedId, onSelect }: Props) {
+  // "besok" on a label follows the clock, so it reads right after midnight too.
+  const minute = useMinute()
   const byId = new Map(plan.itineraries.map((it) => [it.id, it]))
   const ordered = plan.ranking[preference].flatMap((id) => byId.get(id) ?? [])
 
@@ -38,7 +41,7 @@ export function ItineraryList({ plan, departure, picked, preference, selectedId,
           >
             <ItineraryCard
               itinerary={it}
-              lateStart={lateStart(it, departure, picked)}
+              lateStart={lateStart(it, departure, picked, minute)}
               winsAt={PREFERENCES.filter((p) => plan.ranking[p.id][0] === it.id).map((p) => p.label)}
               selected={it.id === selectedId}
               onSelect={() => onSelect(it.id)}
@@ -52,13 +55,12 @@ export function ItineraryList({ plan, departure, picked, preference, selectedId,
 
 // From a picked time, "Berangkat 9 j 36 mnt lagi" would read as counting from now,
 // so the label names the clock time instead.
-function lateStart(it: Itinerary, departure: number, picked: PickedTime | null): string | null {
+function lateStart(it: Itinerary, departure: number, picked: PickedTime | null, minute: number) {
   const startMs = Date.parse(it.start)
   const sec = (startMs - departure) / 1000
   if (sec < LATE_START_SEC) return null
   if (!picked) return `Berangkat ${formatDuration(sec)} lagi`
-  // Days after today: the picked day plus any midnight the wait crosses.
-  const day = formatDay(it.start, picked.day + daysBetween(departure, startMs))
+  const day = formatDay(startMs, daysBetween(minute, startMs))
   return ['Berangkat', day, formatClock(it.start)].filter(Boolean).join(' ')
 }
 

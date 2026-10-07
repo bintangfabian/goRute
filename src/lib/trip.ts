@@ -10,11 +10,15 @@ export type Preference = (typeof PREFERENCES)[number]['id']
 
 /** Days the departure picker offers, counted from today in WIB. */
 export const DEPARTURE_DAYS = [
-  { day: 0, label: 'Hari ini' },
-  { day: 1, label: 'Besok' },
+  { offset: 0, label: 'Hari ini' },
+  { offset: 1, label: 'Besok' },
 ] as const
 
-/** A departure the user picked, in WIB; null where one is expected means "now". */
-export type PickedTime = { day: (typeof DEPARTURE_DAYS)[number]['day']; clock: string }
+/**
+ * A departure the user picked: a WIB date (YYYYMMDD) and "HH:MM". The date rather than
+ * "today"/"tomorrow", so a pick stays on its day when midnight passes with the app open.
+ * Null where one is expected means "now".
+ */
+export type PickedTime = { ymd: number; clock: string }
 
 export { inServiceArea } from '../../shared/region.ts'

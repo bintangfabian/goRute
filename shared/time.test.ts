@@ -31,7 +31,9 @@ test('reads and sets the WIB clock', () => {
   // 06:30 WIB is 23:30 UTC the day before.
   assert.equal(wibClock(wib('2026-10-07T06:30:00')), '06:30')
   assert.equal(wibClock(wib('2026-10-06T23:50:00')), '23:50')
-  const now = wib('2026-10-06T23:50:00')
-  assert.equal(wibTime(now, 0, '07:00'), wib('2026-10-06T07:00:00'))
-  assert.equal(wibTime(now, 1, '07:00'), wib('2026-10-07T07:00:00'))
+  assert.equal(wibTime(20261007, '07:00'), wib('2026-10-07T07:00:00'))
+  assert.equal(wibTime(20261101, '00:30'), wib('2026-11-01T00:30:00'))
+  // A WIB date and clock read off a moment lead back to its minute.
+  const ms = wib('2026-10-07T00:07:42')
+  assert.equal(wibTime(wibDay(ms).ymd, wibClock(ms)), wib('2026-10-07T00:07:00'))
 })

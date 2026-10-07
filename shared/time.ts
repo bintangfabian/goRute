@@ -40,8 +40,9 @@ export function wibClock(ms: number): string {
   return new Date(ms + WIB_OFFSET_MS).toISOString().slice(11, 16)
 }
 
-/** Epoch ms of `clock` ("HH:MM" WIB) on the WIB day `delta` days after the day of `ms`. */
-export function wibTime(ms: number, delta: number, clock: string): number {
+/** Epoch ms of `clock` ("HH:MM" WIB) on the WIB day `ymd` (YYYYMMDD). */
+export function wibTime(ymd: number, clock: string): number {
   const [h, m] = clock.split(':').map(Number)
-  return addDays(wibDay(ms), delta).midnightMs + (h * 60 + m) * 60_000
+  const utcMidnight = Date.UTC(Math.floor(ymd / 10_000), (Math.floor(ymd / 100) % 100) - 1, ymd % 100)
+  return utcMidnight - WIB_OFFSET_MS + (h * 60 + m) * 60_000
 }

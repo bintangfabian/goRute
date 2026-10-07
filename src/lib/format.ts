@@ -6,11 +6,13 @@ const clock = new Intl.DateTimeFormat('id-ID', {
 
 const weekday = new Intl.DateTimeFormat('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' })
 
+const DAY_WORDS: Record<number, string> = { [-1]: 'kemarin', 0: '', 1: 'besok', 2: 'lusa' }
+
 export const formatClock = (iso: string) => clock.format(new Date(iso))
 
-/** The day of `iso`, `days` days after today, in a sentence: '' (today), besok, lusa, or the weekday. */
-export function formatDay(iso: string, days: number) {
-  return days === 0 ? '' : days === 1 ? 'besok' : days === 2 ? 'lusa' : weekday.format(new Date(iso))
+/** The day of `ms`, `days` days after today: '' (today), kemarin, besok, lusa, or the weekday. */
+export function formatDay(ms: number, days: number) {
+  return DAY_WORDS[days] ?? weekday.format(ms)
 }
 
 export function formatDuration(sec: number) {
