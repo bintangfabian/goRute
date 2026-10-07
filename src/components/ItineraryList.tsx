@@ -75,10 +75,14 @@ function ItineraryCard(props: {
   return (
     <motion.button
       type="button"
+      aria-pressed={selected}
       onClick={props.onSelect}
       whileTap={{ scale: 0.98 }}
-      className={`w-full rounded-2xl border-2 p-4 text-left transition-colors ${
-        selected ? 'border-brand bg-brand-soft/40' : 'border-slate-100 bg-white hover:border-slate-200'
+      animate={{ y: selected ? -1 : 0 }}
+      className={`w-full rounded-2xl border-2 p-4 text-left transition-[border-color,background-color,box-shadow] focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:outline-none ${
+        selected
+          ? 'border-brand bg-brand-soft/40 shadow-[0_6px_20px_-10px_rgb(15,118,110,0.5)]'
+          : 'border-slate-100 bg-white hover:border-slate-200'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -144,14 +148,36 @@ function LegChip({ leg }: { leg: Leg }) {
     )
   }
   const Icon = leg.mode === 'BUS' ? BusIcon : TrainIcon
+  const background = leg.route.color || '#334155'
   return (
     <span
       className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-bold"
-      style={{ backgroundColor: leg.route.color || '#334155', color: leg.route.textColor || '#fff' }}
+      style={{ backgroundColor: background, color: readableOn(background, leg.route.textColor || '#ffffff') }}
       title={leg.route.longName}
     >
       <Icon className="size-3.5" />
       {leg.route.shortName}
     </span>
   )
+}
+
+// Feed colours are kept, but some pair white text with a light route colour
+// (9A, 9D: under 3:1). Below WCAG's 4.5:1, use whichever of white or ink reads better.
+function readableOn(background: string, text: string): string {
+  if (!/^#[0-9a-f]{6}$/i.test(background) || !/^#[0-9a-f]{6}$/i.test(text)) return text
+  if (contrast(background, text) >= 4.5) return text
+  return contrast(background, '#ffffff') >= contrast(background, '#0f172a') ? '#ffffff' : '#0f172a'
+}
+
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }

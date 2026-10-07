@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { usePlaceSearch } from '../hooks/usePlaceSearch'
 import { inServiceArea, type Endpoint } from '../lib/trip'
 import { BusIcon, CloseIcon, LocateIcon, PinIcon } from './icons'
@@ -9,27 +9,40 @@ type Props = {
   onChange: (value: Endpoint | null) => void
   placeholder: string
   kind: 'origin' | 'destination'
+  /** Told when the rider starts and stops typing here. */
+  onEditing?: (editing: boolean) => void
 }
 
-export function PlaceField({ value, onChange, placeholder, kind }: Props) {
+// `place` is empty for the GPS option.
+type Option = { id: string; icon: ReactNode; title: string; subtitle: string; place?: Endpoint }
+
+// A combobox: type to search, arrow keys move through the suggestions, Enter
+// takes the highlighted one (or the first place), Escape closes the list.
+export function PlaceField({ value, onChange, placeholder, kind, onEditing }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const listId = useId()
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
+  // Escape hides the list until the rider types again.
+  const [dismissed, setDismissed] = useState(false)
+  const [active, setActive] = useState(-1)
   const [locating, setLocating] = useState(false)
   const [geoError, setGeoError] = useState<string | null>(null)
   const search = usePlaceSearch(focused ? query : '')
 
+  const label = kind === 'origin' ? 'Asal' : 'Tujuan'
   const offerLocation = kind === 'origin'
   const hasQuery = query.trim().length >= 2
-  const open = focused && (hasQuery || offerLocation)
+  const open = focused && !dismissed && (hasQuery || offerLocation)
 
   function choose(endpoint: Endpoint) {
     onChange(endpoint)
     setQuery('')
+    setActive(-1)
     inputRef.current?.blur()
   }
 
-  function useCurrentLocation() {
+  function locateMe() {
     if (!navigator.geolocation) {
       setGeoError('Browser ini tidak mendukung lokasi.')
       return
@@ -53,6 +66,62 @@ export function PlaceField({ value, onChange, placeholder, kind }: Props) {
     )
   }
 
+  const options: Option[] = [
+    ...(offerLocation
+      ? [
+          {
+            id: 'gps',
+            icon: <LocateIcon className="size-4 text-brand" />,
+            title: locating ? 'Mencari lokasimu…' : 'Lokasi saya',
+            subtitle: geoError ?? 'Pakai GPS perangkat',
+          },
+        ]
+      : []),
+    ...(hasQuery ? search.places : []).map((p) => ({
+      id: p.id,
+      icon: p.kind === 'stop' ? <BusIcon className="size-4 text-brand" /> : <PinIcon className="size-4 text-slate-400" />,
+      title: p.name,
+      subtitle: p.address,
+      place: { name: p.name, lat: p.lat, lon: p.lon },
+    })),
+  ]
+  function pick(o: Option) {
+    if (o.place) choose(o.place)
+    else locateMe()
+  }
+
+  // Results can shrink under the highlight while they load.
+  const current = active < options.length ? active : -1
+  const optionId = (i: number) => `${listId}-${i}`
+
+  // Keep the highlighted suggestion in view when arrow keys move past the scrolled part.
+  useEffect(() => {
+    if (current >= 0) document.getElementById(`${listId}-${current}`)?.scrollIntoView({ block: 'nearest' })
+  }, [current, listId])
+
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (options.length === 0) return
+      e.preventDefault()
+      setDismissed(false)
+      const n = options.length
+      if (current === -1) setActive(e.key === 'ArrowDown' ? 0 : n - 1)
+      else setActive((current + (e.key === 'ArrowDown' ? 1 : -1) + n) % n)
+    } else if (e.key === 'Enter') {
+      const chosen = current >= 0 ? options[current] : options.find((o) => o.place)
+      if (open && chosen) {
+        e.preventDefault()
+        pick(chosen)
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      if (open) {
+        setDismissed(true)
+        setActive(-1)
+      } else inputRef.current?.blur()
+    }
+  }
+
   return (
     <div>
       <label className="flex items-center gap-3 rounded-2xl bg-slate-100 px-4 py-3 transition-shadow focus-within:ring-2 focus-within:ring-brand">
@@ -61,13 +130,36 @@ export function PlaceField({ value, onChange, placeholder, kind }: Props) {
         />
         <input
           ref={inputRef}
+          role="combobox"
+          aria-label={label}
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={open && current >= 0 ? optionId(current) : undefined}
+          // Place names are not dictionary words: no autocorrect ("blok m" → "Block M") or red underlines.
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          enterKeyHint="search"
           value={focused ? query : (value?.name ?? '')}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setActive(-1)
+            setDismissed(false)
+          }}
+          onKeyDown={onKeyDown}
           onFocus={() => {
             setFocused(true)
             setGeoError(null)
+            onEditing?.(true)
           }}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false)
+            setDismissed(false)
+            setActive(-1)
+            onEditing?.(false)
+          }}
           placeholder={focused && value ? value.name : placeholder}
           className="w-full min-w-0 bg-transparent text-base outline-none placeholder:text-slate-400"
         />
@@ -75,8 +167,8 @@ export function PlaceField({ value, onChange, placeholder, kind }: Props) {
           <button
             type="button"
             onClick={() => onChange(null)}
-            aria-label="Hapus"
-            className="-m-1 rounded-full p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+            aria-label={`Hapus ${label.toLowerCase()}`}
+            className="-m-1 rounded-full p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
           >
             <CloseIcon className="size-4" />
           </button>
@@ -85,68 +177,57 @@ export function PlaceField({ value, onChange, placeholder, kind }: Props) {
 
       <AnimatePresence initial={false}>
         {open && (
-          <motion.ul
+          <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className="overflow-hidden"
           >
-            {offerLocation && (
-              <Suggestion
-                icon={<LocateIcon className="size-4 text-brand" />}
-                title={locating ? 'Mencari lokasimu…' : 'Lokasi saya'}
-                subtitle={geoError ?? 'Pakai GPS perangkat'}
-                onSelect={useCurrentLocation}
-              />
-            )}
-            {hasQuery && search.loading && search.places.length === 0 && <Note>Mencari…</Note>}
-            {hasQuery && search.error && <Note>{search.error}</Note>}
-            {hasQuery && !search.loading && !search.error && search.places.length === 0 && (
-              <Note>Tempat tidak ditemukan. Coba nama lain, atau ketuk peta.</Note>
-            )}
-            {search.places.map((p) => (
-              <Suggestion
-                key={p.id}
-                icon={
-                  p.kind === 'stop' ? (
-                    <BusIcon className="size-4 text-brand" />
-                  ) : (
-                    <PinIcon className="size-4 text-slate-400" />
-                  )
-                }
-                title={p.name}
-                subtitle={p.address}
-                onSelect={() => choose({ name: p.name, lat: p.lat, lon: p.lon })}
-              />
-            ))}
-          </motion.ul>
+            <div className="max-h-[min(26rem,55dvh)] overflow-y-auto overscroll-contain">
+              <ul id={listId} role="listbox" aria-label={`Saran ${label.toLowerCase()}`}>
+                {options.map((o, i) => (
+                  <li key={o.id} role="none">
+                    <button
+                      type="button"
+                      role="option"
+                      id={optionId(i)}
+                      aria-selected={i === current}
+                      tabIndex={-1}
+                      // Keep the input focused so the list does not close before the click lands.
+                      onMouseDown={(e) => e.preventDefault()}
+                      // Only a real mouse move highlights: a list opening under a resting pointer must not
+                      // pick what Enter takes.
+                      onMouseMove={(e) => (e.movementX || e.movementY) && setActive(i)}
+                      onClick={() => pick(o)}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors active:bg-slate-100 ${
+                        i === current ? 'bg-slate-100' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-100">{o.icon}</span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">{o.title}</span>
+                        {o.subtitle && <span className="block truncate text-xs text-slate-500">{o.subtitle}</span>}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {hasQuery && (
+                <p role="status" className="px-3 py-3 text-sm text-slate-500 empty:hidden">
+                  {search.loading && search.places.length === 0
+                    ? 'Mencari…'
+                    : search.error
+                      ? search.error
+                      : !search.loading && search.places.length === 0
+                        ? 'Tempat tidak ditemukan. Coba nama lain, atau ketuk peta.'
+                        : ''}
+                </p>
+              )}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
   )
-}
-
-function Suggestion(props: { icon: ReactNode; title: string; subtitle: string; onSelect: () => void }) {
-  return (
-    <li>
-      <button
-        type="button"
-        // Keep the input focused so the list does not close before the click lands.
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={props.onSelect}
-        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-slate-50 active:bg-slate-100"
-      >
-        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-100">{props.icon}</span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-semibold">{props.title}</span>
-          {props.subtitle && <span className="block truncate text-xs text-slate-500">{props.subtitle}</span>}
-        </span>
-      </button>
-    </li>
-  )
-}
-
-function Note({ children }: { children: ReactNode }) {
-  return <li className="px-3 py-3 text-sm text-slate-500">{children}</li>
 }

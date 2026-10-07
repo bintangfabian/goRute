@@ -13,6 +13,8 @@ export type Plan = {
   itineraries: Itinerary[]
   /** Itinerary IDs from best to worst for each preference. */
   ranking: Record<'tercepat' | 'termurah' | 'termudah', string[]>
+  /** Why there is no itinerary, when there is none: no stop within walking reach of an end, or no trip at that time. */
+  reason?: 'far-from-origin' | 'far-from-destination' | 'no-trip'
 }
 
 export type Itinerary = {

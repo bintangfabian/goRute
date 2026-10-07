@@ -20,9 +20,11 @@ type Props = {
   children?: ReactNode
   // Called when the user taps a point inside the service area.
   onPick?: (point: Endpoint) => void
+  // Called for a tap outside it, so the tap is not silently ignored.
+  onOutside?: () => void
 }
 
-export function MapView({ children, onPick }: Props) {
+export function MapView({ children, onPick, onOutside }: Props) {
   return (
     <Map
       mapLib={maplibre}
@@ -35,7 +37,8 @@ export function MapView({ children, onPick }: Props) {
       attributionControl={false}
       onClick={(e) => {
         const { lat, lng } = e.lngLat
-        if (onPick && inServiceArea(lat, lng)) onPick({ name: 'Titik di peta', lat, lon: lng })
+        if (inServiceArea(lat, lng)) onPick?.({ name: 'Titik di peta', lat, lon: lng })
+        else onOutside?.()
       }}
     >
       {children}
@@ -45,7 +48,7 @@ export function MapView({ children, onPick }: Props) {
 
 export function MapAttribution() {
   return (
-    <p className="text-center text-[10px] text-slate-400">
+    <p className="text-center text-[10px] text-slate-500">
       <a href="https://openfreemap.org" target="_blank" rel="noreferrer">
         OpenFreeMap
       </a>{' '}

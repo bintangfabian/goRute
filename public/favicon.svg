@@ -1,6 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#0f766e"/>
-  <path d="M152 360c0-64 52-88 104-88s104-24 104-88" fill="none" stroke="#fff" stroke-width="36" stroke-linecap="round" stroke-dasharray="0 72"/>
-  <circle cx="152" cy="360" r="44" fill="#fff"/>
-  <circle cx="360" cy="152" r="44" fill="#fbbf24"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>goRute</title>
+  <rect width="256" height="256" rx="58" fill="#0f766e"/>
+  <g transform="translate(43.52 43.52) scale(0.66)">
+    <path fill="#ffffff" d="M61 88A68 68 0 1 1 197 88A68 68 0 1 1 61 88Z M97 88A32 32 0 1 0 161 88A32 32 0 1 0 97 88Z M161 38A18 18 0 0 1 197 38V152A68 68 0 0 1 129 220H111V184H129A32 32 0 0 0 161 152Z"/>
+    <path fill="#fbbf24" d="M59 202A30 30 0 1 1 119 202A30 30 0 1 1 59 202Z M78 202A11 11 0 1 0 100 202A11 11 0 1 0 78 202Z"/>
+  </g>
 </svg>

@@ -18,6 +18,8 @@ goRute/
 │   └── geocode.ts          # pencarian tempat lewat Photon
 ├── shared/                 # tipe API, area layanan & hitungan jam WIB, dipakai web dan server
 ├── src/                    # PWA: React + Vite + Tailwind + Motion + MapLibre
+│   └── components/         # termasuk logo, ikon, dan ilustrasi beranimasi (illustrations.tsx)
+├── public/favicon.svg      # master logo; ikon PWA & Apple dibuat dari sini (pwa-assets.config.ts)
 ├── scripts/                # pipeline data: unduh GTFS, build timetable
 ├── data/
 │   ├── raw/                # hasil unduhan (tidak di-commit)
@@ -58,7 +60,7 @@ Batas plan Hobby yang relevan: hanya untuk penggunaan non-komersial, 4 jam CPU a
 
 - **Data.** `scripts/gtfs/build.ts` mengelompokkan perjalanan GTFS menjadi *pola* (rute + urutan halte + waktu tempuh yang sama), mengekspansi `frequencies.txt` menjadi jam keberangkatan, dan menempelkan halte ke `shapes.txt` untuk garis di peta.
 - **RAPTOR.** Putaran ke-*k* mencari waktu tiba paling awal di setiap halte dengan maksimal *k* kali naik, sehingga hasilnya himpunan Pareto antara waktu tiba dan jumlah transit.
-- **Pencarian.** Tiap permintaan menjalankan pencarian normal (jalan ≤1,2 km, transfer ≤500 m), pencarian "mudah" (jalan ≤600 m, transfer ≤200 m, maks 3 kali naik), dan pencarian ulang tanpa tiap rute dari opsi tercepat untuk memunculkan alternatif. Kalau ada opsi yang naik bus premium (misal Royaltrans), pencarian diulang tanpa semua bus premium supaya opsi tarif reguler ikut muncul: RAPTOR hanya membandingkan jam tiba dan jumlah naik, bukan tarif. Hasil yang sama digabung dan opsi yang jauh lebih lambat dari yang tercepat dibuang (opsi yang lebih murah boleh lebih lama 1 menit per Rp250 yang dihemat), begitu juga opsi yang kalah dari opsi lain di semua aspek (jam tiba, lama perjalanan, tarif, transit, jalan kaki).
+- **Pencarian.** Tiap permintaan menjalankan pencarian normal (jalan ≤1,2 km, transfer ≤500 m), pencarian "mudah" (jalan ≤600 m, transfer ≤200 m, maks 3 kali naik), dan pencarian ulang tanpa tiap rute dari opsi tercepat untuk memunculkan alternatif. Kalau ada opsi yang naik bus premium (misal Royaltrans), pencarian diulang tanpa semua bus premium supaya opsi tarif reguler ikut muncul: RAPTOR hanya membandingkan jam tiba dan jumlah naik, bukan tarif. Hasil yang sama digabung dan opsi yang jauh lebih lambat dari yang tercepat dibuang (opsi yang lebih murah boleh lebih lama 1 menit per Rp250 yang dihemat), begitu juga opsi yang kalah dari opsi lain di semua aspek (jam tiba, lama perjalanan, tarif, transit, jalan kaki). Opsi yang hampir kembar juga dibuang: selisih waktu sampai 5 menit (atau 10% dari perjalanan yang lebih pendek) dan jalan kaki sampai 200 m dianggap seri, karena jadwal berbasis interval dan jalan kaki masih estimasi.
 - **Jalan kaki.** Masih estimasi: jarak garis lurus × 1,3 dengan kecepatan 4,5 km/jam, dan digambar sebagai garis lurus putus-putus.
 - **Tarif.** Dari `fare_attributes`/`fare_rules` GTFS, ditambah aturan yang tidak bisa dinyatakan di GTFS (TransJakarta Rp2.000 pukul 05.00–07.00; satu tiket berlaku untuk transfer selama 3 jam).
 
@@ -67,11 +69,19 @@ Batas plan Hobby yang relevan: hanya untuk penggunaan non-komersial, 4 jam CPU a
 | Endpoint | Fungsi |
 |---|---|
 | `GET /api/v1/status` | Feed yang dimuat dan waktu build data |
-| `GET /api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]` | Opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi. `time` (RFC 3339) adalah jam berangkat; tanpa `time` dipakai jam server. Web app selalu mengirim `time`: jam HP, atau jam berangkat yang dipilih user, jadi label di kartu dihitung dari jam yang sama dengan rutenya |
+| `GET /api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]` | Opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi. `time` (RFC 3339) adalah jam berangkat; tanpa `time` dipakai jam server. Web app selalu mengirim `time`: jam HP, atau jam berangkat yang dipilih user, jadi label di kartu dihitung dari jam yang sama dengan rutenya. Kalau tidak ada opsi, `reason` menjelaskan sebabnya: `far-from-origin`/`far-from-destination` (tidak ada halte dalam 2,5 km) atau `no-trip` |
 | `GET /api/v1/stops?q=` | Cari halte dari timetable: instan, paham singkatan (St., Ps., Sbr.) dan alias (Monas, GBK); halte yang namanya dipakai di beberapa tempat diberi petunjuk "Dekat Halte X" |
 | `GET /api/v1/places?q=` | Cari tempat di Jabodetabek (diteruskan ke [Photon](https://photon.komoot.io)) |
 
 Bentuk respons ada di `shared/api.ts`.
+
+## Tampilan & aset
+
+- **Logo** (`public/favicon.svg`): huruf *g* yang mangkuknya titik asal dan ekornya rute ke halte tujuan (cincin amber). Dibuat dengan [logo-design-skill](https://github.com/kaankiziltug/logo-design-skill) dan lolos uji 16 px, satu warna, dan latar gelap. `pnpm build` menurunkan favicon, ikon PWA, ikon *maskable*, dan ikon Apple dari file ini.
+- **Splash** ada di `index.html` (logo digambar seperti rute) supaya tampil sebelum JavaScript dimuat; `src/main.tsx` melepasnya setelah app tampil.
+- **Ilustrasi & animasi**: tiap keadaan panel (siap cari, belum ada bus, halte terlalu jauh, server gagal, asal = tujuan) punya ilustrasi SVG beranimasi. Semua animasi mengikuti setelan *reduce motion*.
+- **Gambar share** `public/og-image.png` (1200×630) dipakai tag Open Graph. Ganti `og:image` di `index.html` ke URL absolut setelah domain produksi ada.
+- **Tata letak**: *bottom sheet* di HP (ketuk atau geser pegangannya untuk membesarkan) dan panel kiri di layar ≥1024 px.
 
 ## Sumber data
 

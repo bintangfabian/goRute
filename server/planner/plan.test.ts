@@ -99,6 +99,14 @@ describe('planTrip', () => {
       departure: new Date('2026-10-06T08:00:00+07:00'),
     })
     assert.deepEqual(p.itineraries, [])
+    assert.equal(p.reason, 'far-from-origin')
+    const back = planTrip(tt, {
+      from: { name: 'Asal', ...STOPS.F },
+      to: { name: 'Bogor', lat: -6.6, lon: 106.8 },
+      departure: new Date('2026-10-06T08:00:00+07:00'),
+    })
+    assert.equal(back.reason, 'far-from-destination')
+    assert.equal(plan('A', 'F', '2026-10-06T08:00:00+07:00').reason, undefined)
   })
 })
 

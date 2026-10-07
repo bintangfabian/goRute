@@ -17,21 +17,26 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      // Icons & favicon links are generated from public/favicon.svg at build time.
-      pwaAssets: { image: 'public/favicon.svg' },
+      // Icons & favicon links are generated from public/favicon.svg at build time (pwa-assets.config.ts).
+      pwaAssets: { config: true },
       manifest: {
+        id: '/',
         name: 'goRute',
         short_name: 'goRute',
         description: 'Cari rute transportasi umum tercepat, termurah, dan termudah di Jabodetabek.',
         lang: 'id',
         theme_color: '#0f766e',
-        background_color: '#f8fafc',
+        // Matches the splash in index.html, so the launch does not flash white.
+        background_color: '#0f766e',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
+        categories: ['travel', 'navigation'],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Only link previews need it, not an offline rider.
+        globIgnores: ['**/og-image.png'],
         // maplibre-gl alone is larger than workbox's 2 MiB default.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallbackDenylist: [/^\/api\//],
