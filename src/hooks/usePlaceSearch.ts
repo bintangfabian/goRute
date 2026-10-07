@@ -55,8 +55,11 @@ export function usePlaceSearch(query: string): PlaceSearch {
   }, [q, active])
 
   if (!active) return { places: [], loading: false, error: null }
-  const geocoded = asksGeocoder ? (answers.places ?? []) : []
-  const places = merge(answers.stops ?? [], geocoded).slice(0, MAX_SHOWN)
+  // Older results only stand in while the rider keeps typing the same word ("mon" → "monas");
+  // after a different query they would be suggestions for something else.
+  const usable = answers.q === q || q.toLowerCase().startsWith(answers.q.toLowerCase())
+  const geocoded = asksGeocoder && usable ? (answers.places ?? []) : []
+  const places = usable ? merge(answers.stops ?? [], geocoded).slice(0, MAX_SHOWN) : []
   const loading = answers.q !== q || answers.stops === null || (asksGeocoder && answers.places === null)
   // A failed geocoder only matters when the haltes found nothing either.
   return { places, loading, error: !loading && places.length === 0 && asksGeocoder ? answers.error : null }
