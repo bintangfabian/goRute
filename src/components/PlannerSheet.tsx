@@ -36,7 +36,7 @@ type Props = {
 
 // A bottom sheet on phones (tap or swipe the handle to grow it), a panel on the left on wide screens.
 export function PlannerSheet(props: Props) {
-  const { ref, origin, destination, preference } = props
+  const { ref, origin, destination, preference, plan } = props
   const wide = useMediaQuery('(min-width: 1024px)')
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -55,6 +55,12 @@ export function PlannerSheet(props: Props) {
     setExpanded(now)
   }
   const searching = editing && !wide
+  // A message with a button (Coba lagi, Cari untuk Senin) may take more of a short phone,
+  // so the button stays in view; everything else leaves that room to the map.
+  const withButton =
+    !props.samePlace &&
+    (plan.kind === 'error' ||
+      (plan.kind === 'ready' && plan.plan.itineraries.length === 0 && plan.plan.nextServiceDate !== undefined))
 
   return (
     <motion.section
@@ -66,7 +72,7 @@ export function PlannerSheet(props: Props) {
       // Expanded, the sheet is tall whatever its content, so the fields sit high and the
       // suggestions under them stay above the on-screen keyboard.
       className={`absolute inset-x-0 bottom-0 z-10 mx-auto flex max-w-lg flex-col rounded-t-3xl bg-white shadow-[0_-8px_30px_rgb(0,0,0,0.12)] transition-[max-height,min-height] duration-300 ease-out ${
-        expanded ? 'max-h-[88dvh] min-h-[88dvh]' : 'max-h-[62dvh] min-h-0'
+        expanded ? 'max-h-[88dvh] min-h-[88dvh]' : withButton ? 'max-h-[70dvh] min-h-0' : 'max-h-[62dvh] min-h-0'
       } lg:inset-y-4 lg:right-auto lg:left-4 lg:mx-0 lg:max-h-none lg:min-h-0 lg:w-[420px] lg:max-w-none lg:rounded-3xl lg:shadow-[0_12px_40px_rgb(0,0,0,0.14)]`}
     >
       {wide ? (
@@ -283,7 +289,10 @@ function State(props: { art: ReactNode; title: string; children: ReactNode; acti
       transition={{ duration: 0.25 }}
       className="flex flex-col items-center pb-2 text-center"
     >
-      {props.art}
+      {/* On short phones a state with a button draws its scene smaller, or not at all, so the button stays in view. */}
+      <div className={props.action ? '[@media(max-height:600px)]:hidden [@media(max-height:700px)]:[&>svg]:h-11' : undefined}>
+        {props.art}
+      </div>
       <p className="mt-2 text-sm font-bold text-slate-800">{props.title}</p>
       <p className={`mt-1 max-w-xs text-sm ${props.tone === 'error' ? 'text-red-600' : 'text-slate-500'}`}>
         {props.children}

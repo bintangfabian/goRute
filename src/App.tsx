@@ -37,6 +37,7 @@ export default function App() {
   const ready = plan.kind === 'ready' ? plan.plan : null
   const selectedId = ready ? (chosen?.plan === ready ? chosen.id : (ready.ranking[preference][0] ?? null)) : null
   const selected = ready?.itineraries.find((it) => it.id === selectedId) ?? null
+  const message = samePlace || plan.kind === 'error' || ready?.itineraries.length === 0
   const clearToast = useCallback(() => setToast(null), [])
 
   return (
@@ -48,7 +49,7 @@ export default function App() {
       >
         {selected && <RouteLine itinerary={selected} />}
         <EndpointMarkers origin={origin} destination={destination} />
-        <CameraFollow origin={origin} destination={destination} itinerary={selected} sheet={sheetRef} />
+        <CameraFollow origin={origin} destination={destination} itinerary={selected} sheet={sheetRef} message={message} />
       </MapView>
       <BrandBar
         state={status}

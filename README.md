@@ -79,7 +79,7 @@ Bentuk respons ada di `shared/api.ts`.
 
 - **Logo** (`public/favicon.svg`): huruf *g* yang mangkuknya titik asal dan ekornya rute ke halte tujuan (cincin amber). Dibuat dengan [logo-design-skill](https://github.com/kaankiziltug/logo-design-skill) dan lolos uji 16 px, satu warna, dan latar gelap. `pnpm build` menurunkan favicon, ikon PWA, ikon *maskable*, dan ikon Apple dari file ini.
 - **Splash** ada di `index.html` (logo digambar seperti rute) supaya tampil sebelum JavaScript dimuat; `src/main.tsx` melepasnya setelah app tampil. Kalau app tidak pernah tampil (koneksi putus saat pertama buka, atau browser terlalu lama), splash mundur sendiri lewat CSS setelah 10 detik dan memperlihatkan pesan dengan tombol Muat ulang di `#root`, yang diganti app begitu tampil. Tanpa JavaScript, pesan itu langsung tampil.
-- **Ilustrasi & animasi**: tiap keadaan panel (siap cari, belum ada bus, bus di sekitar libur hari itu, halte terlalu jauh, server gagal, asal = tujuan) punya ilustrasi SVG beranimasi. Semua animasi mengikuti setelan *reduce motion*.
+- **Ilustrasi & animasi**: tiap keadaan panel (siap cari, belum ada bus, bus di sekitar libur hari itu, halte terlalu jauh, server gagal, asal = tujuan) punya ilustrasi SVG beranimasi. Di layar pendek, keadaan yang punya tombol (Coba lagi, Cari untuk Senin) mengecilkan atau menyembunyikan ilustrasinya dan boleh memakai panel lebih tinggi supaya tombolnya tetap terlihat. Semua animasi mengikuti setelan *reduce motion*.
 - **Gambar share** `public/og-image.png` (1200×630) dipakai tag Open Graph. Ganti `og:image` di `index.html` ke URL absolut setelah domain produksi ada.
 - **Tata letak**: *bottom sheet* di HP (ketuk atau geser pegangannya untuk membesarkan) dan panel kiri di layar ≥1024 px.
 
