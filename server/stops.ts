@@ -11,8 +11,9 @@ const SAME_PLACE_M = 600
 /** A BRT halte farther than this makes a misleading "Dekat Halte …" hint. */
 const MAX_BRT_HINT_M = 1500
 
-/** GTFS halte names abbreviate a lot; spelled out, "stasiun gambir" finds "St. Gambir 1". */
+/** Halte and place names abbreviate a lot; spelled out, "stasiun gambir" finds "St. Gambir 1" and "rs" a Rumah Sakit. */
 const ABBREVIATIONS: Record<string, string> = {
+  apt: 'apartemen',
   gg: 'gang',
   jl: 'jalan',
   jln: 'jalan',
@@ -21,7 +22,10 @@ const ABBREVIATIONS: Record<string, string> = {
   kel: 'kelurahan',
   komp: 'komplek',
   kp: 'kampung',
+  mal: 'mall',
+  perum: 'perumahan',
   ps: 'pasar',
+  rs: 'rumah sakit',
   sbr: 'seberang',
   st: 'stasiun',
   term: 'terminal',
@@ -137,7 +141,7 @@ export function words(s: string): string[] {
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter(Boolean)
-    .map((w) => ABBREVIATIONS[w] ?? w)
+    .flatMap((w) => (ABBREVIATIONS[w] ?? w).split(' '))
 }
 
 /**

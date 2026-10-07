@@ -4,7 +4,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Itinerary } from '../../shared/api.ts'
+import { distanceM } from '../geo.ts'
 import { loadTimetable } from '../timetable/timetable.ts'
+import { loadWalking } from '../walk/walking.ts'
 import { planTrip } from './plan.ts'
 import { dominates, outshines } from './rank.ts'
 
@@ -87,4 +89,36 @@ test('Royaltrans areas on a weekend: walk to a running bus, or say when one runs
   const cinere = plan([-6.3297, 106.7838], [-6.1754, 106.8272], '2026-10-10T07:00:00+07:00')
   assert.ok(cinere.itineraries.length > 0)
   for (const it of cinere.itineraries) assert.ok(routes(it).every((r) => !r.startsWith('D3')), routes(it).join(' > '))
+})
+
+test('walks along the streets to the halte, with directions', () => {
+  const tt = loadTimetable()
+  const walking = loadWalking(tt)
+  assert.ok(walking, 'data/walk.bin is missing')
+  // A home in Tambun, Bekasi, east of the B21 haltes at Bulak Kapal.
+  const home = { name: 'Rumah', lat: -6.24871, lon: 107.03645 }
+  const p = planTrip(tt, { from: home, to: { name: 'Gambir', lat: -6.1766, lon: 106.8305 }, departure: new Date('2026-10-08T07:00:00+07:00') }, walking)
+  const walk = p.itineraries[0].legs[0]
+  assert.equal(walk.mode, 'WALK')
+  const stop = walk.to
+  // Along streets: many points, and longer than a straight line.
+  assert.ok(walk.geometry.length > 20, `${walk.geometry.length} points`)
+  assert.ok(walk.distanceM > distanceM(home.lat, home.lon, stop.lat, stop.lon) * 1.1, `${walk.distanceM} m`)
+  const steps = walk.steps!
+  assert.ok(steps.length >= 3 && steps[0].maneuver === 'depart', JSON.stringify(steps))
+  assert.ok(steps.some((s) => s.name.startsWith('Jalan')), JSON.stringify(steps))
+  const stepped = steps.reduce((m, s) => m + s.distanceM, 0)
+  assert.ok(Math.abs(stepped - walk.distanceM) < walk.distanceM * 0.05, `${stepped} vs ${walk.distanceM}`)
+})
+
+test('transfers between haltes walk along paths', () => {
+  const tt = loadTimetable()
+  loadWalking(tt)
+  const from = tt.stopName.indexOf('BNN 2')
+  const to = tt.stopName.indexOf('Cawang')
+  const flat = tt.transfers[from]
+  let meters = -1
+  for (let i = 0; i < flat.length; i += 3) if (flat[i] === to) meters = flat[i + 1]
+  // Over the footbridge: farther than the straight line between the two.
+  assert.ok(meters > distanceM(tt.stopLat[from], tt.stopLon[from], tt.stopLat[to], tt.stopLon[to]), `${meters} m`)
 })

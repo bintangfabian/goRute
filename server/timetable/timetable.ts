@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { decodePolyline, type LonLat } from '../geo.ts'
-import { DETOUR, walkMeters, walkSeconds } from '../walk.ts'
+import { DETOUR, walkMeters, walkSeconds } from '../walk/estimate.ts'
 import {
   TIMETABLE_VERSION,
   type FareProduct,
@@ -35,6 +35,7 @@ export class Timetable {
   readonly builtAt: string
   readonly feeds: { id: string; name: string }[]
   readonly stopCount: number
+  readonly stopId: string[]
   readonly stopName: string[]
   readonly stopLat: Float64Array
   readonly stopLon: Float64Array
@@ -44,8 +45,12 @@ export class Timetable {
   readonly patterns: Pattern[]
   /** For each stop, flattened (pattern, position) pairs of the patterns serving it. */
   readonly stopPatterns: Int32Array[]
-  /** For each stop, flattened (stop, meters, seconds) triples of walking transfers. */
-  readonly transfers: Int32Array[]
+  /**
+   * For each stop, flattened (stop, meters, seconds) triples of walking transfers:
+   * straight-line estimates here, replaced by walks along paths (server/walk) when
+   * data/walk.bin matches this timetable.
+   */
+  transfers: Int32Array[]
   private readonly encodedShapes: string[]
   private readonly decodedShapes = new Map<number, LonLat[]>()
   private readonly grid = new Map<number, number[]>()
@@ -57,6 +62,7 @@ export class Timetable {
     this.builtAt = file.builtAt
     this.feeds = file.feeds
     this.stopCount = file.stops.id.length
+    this.stopId = file.stops.id
     this.stopName = file.stops.name
     this.stopLat = Float64Array.from(file.stops.lat)
     this.stopLon = Float64Array.from(file.stops.lon)

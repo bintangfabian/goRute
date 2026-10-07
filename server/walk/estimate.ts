@@ -1,7 +1,8 @@
-import { distanceM } from './geo.ts'
+import { distanceM } from '../geo.ts'
 
-// Walking is estimated from straight-line distance until the router has a
-// street network: a detour factor turns it into a typical street distance.
+// Walking speed, and the straight-line estimate used where there are no paths
+// to follow: test networks, and trip ends far from every mapped path. A detour
+// factor turns the straight line into a typical street distance.
 
 /** Meters per second, about 4.5 km/h. */
 export const WALK_SPEED = 1.25
