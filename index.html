@@ -3,11 +3,141 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0f766e" />
     <meta name="description" content="Cari rute transportasi umum tercepat, termurah, dan termudah di Jabodetabek." />
-    <title>goRute</title>
+    <meta name="application-name" content="goRute" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="goRute" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="goRute" />
+    <meta property="og:title" content="goRute · Rute transportasi umum Jabodetabek" />
+    <meta property="og:description" content="Cari rute tercepat, termurah, dan termudah naik TransJakarta." />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="id_ID" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>goRute · Rute transportasi umum Jabodetabek</title>
+    <style>
+      /* Splash: shown before the app's JavaScript loads, removed by src/main.tsx. */
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: grid;
+        place-items: center;
+        background: #0f766e;
+        transition:
+          opacity 0.4s ease,
+          visibility 0.4s;
+      }
+      #splash.done {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      #splash .inner {
+        display: grid;
+        justify-items: center;
+        gap: 14px;
+        transition: transform 0.4s ease;
+      }
+      #splash.done .inner {
+        transform: scale(1.06);
+      }
+      #splash svg {
+        width: 104px;
+        height: 104px;
+        overflow: visible;
+      }
+      #splash .route {
+        fill: none;
+        stroke: #fff;
+        stroke-width: 36;
+        stroke-dasharray: var(--len);
+        stroke-dashoffset: var(--len);
+        animation: splash-draw 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      }
+      #splash .bowl {
+        --len: 315;
+      }
+      #splash .tail {
+        --len: 211;
+        animation-delay: 0.3s;
+      }
+      #splash .cap,
+      #splash .stop {
+        transform: scale(0);
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: splash-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      }
+      #splash .cap {
+        animation-duration: 0.2s;
+        animation-delay: 0.3s;
+      }
+      #splash .stop {
+        animation-delay: 0.8s;
+      }
+      #splash .word {
+        color: #fff;
+        font: 800 28px/1 'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: -0.02em;
+        opacity: 0;
+        transform: translateY(8px);
+        animation: splash-rise 0.5s ease 0.9s forwards;
+      }
+      #splash .word b {
+        color: #99f6e4;
+        font-weight: inherit;
+      }
+      @keyframes splash-draw {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+      @keyframes splash-pop {
+        to {
+          transform: scale(1);
+        }
+      }
+      @keyframes splash-rise {
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #splash *,
+        #splash {
+          animation: none !important;
+          transition: none !important;
+        }
+        #splash .route {
+          stroke-dashoffset: 0;
+        }
+        #splash .cap,
+        #splash .stop,
+        #splash .word {
+          transform: none;
+          opacity: 1;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="splash" aria-hidden="true">
+      <div class="inner">
+        <!-- The logo drawn as the route it stands for: the bowl, the tail, then the amber stop. -->
+        <svg viewBox="0 0 256 256">
+          <circle class="route bowl" cx="129" cy="88" r="50" />
+          <path class="route tail" d="M179 38V152A50 50 0 0 1 129 202H111" />
+          <circle class="cap" cx="179" cy="38" r="18" fill="#fff" />
+          <circle class="stop" cx="89" cy="202" r="20.5" fill="none" stroke="#fbbf24" stroke-width="19" />
+        </svg>
+        <div class="word"><b>go</b>Rute</div>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
