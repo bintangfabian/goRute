@@ -1,0 +1,483 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Arsitektur goRute",
+    "locale": "id",
+    "translations": {
+      "legend.title": "Keterangan"
+    },
+    "output": ".archify/architecture-gorute-20261009-0015/arsitektur.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/bintangfabian/goRute.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "d5c50f566d8d668f0ebceae2272f6464fd74d1b5"
+    },
+    "legend": {
+      "entries": {
+        "frontend": {
+          "label": "Aplikasi di browser"
+        },
+        "backend": {
+          "label": "Kode server dan skrip data"
+        },
+        "database": {
+          "label": "Data yang ikut di-deploy"
+        },
+        "external": {
+          "label": "Penumpang dan layanan luar"
+        }
+      }
+    }
+  },
+  "components": [
+    {
+      "id": "penumpang",
+      "type": "external",
+      "icon": "person",
+      "label": "Penumpang",
+      "sublabel": "HP atau laptop",
+      "pos": [
+        40,
+        204
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "petaubin",
+      "type": "external",
+      "label": "OpenFreeMap",
+      "sublabel": "style dan tile peta",
+      "pos": [
+        330,
+        40
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/components/map/MapView.tsx",
+          "line": 17,
+          "end_line": 23,
+          "label": "style Positron, disetel dulu"
+        },
+        {
+          "path": "vite.config.ts",
+          "line": 62,
+          "end_line": 76,
+          "label": "service worker menyimpan style dan tile"
+        }
+      ]
+    },
+    {
+      "id": "pwa",
+      "type": "frontend",
+      "label": "PWA goRute",
+      "sublabel": "React, MapLibre, service worker",
+      "pos": [
+        330,
+        200
+      ],
+      "size": [
+        190,
+        72
+      ],
+      "sources": [
+        {
+          "path": "src/App.tsx",
+          "line": 40,
+          "label": "usePlan untuk asal, tujuan, jam"
+        },
+        {
+          "path": "src/hooks/usePlan.ts",
+          "line": 62,
+          "end_line": 74,
+          "label": "GET /api/v1/plan"
+        },
+        {
+          "path": "vite.config.ts",
+          "line": 29,
+          "end_line": 30,
+          "label": "PWA, update otomatis"
+        }
+      ]
+    },
+    {
+      "id": "rencana",
+      "type": "backend",
+      "label": "/api/v1/plan",
+      "sublabel": "RAPTOR, jalan kaki, tarif",
+      "pos": [
+        670,
+        200
+      ],
+      "size": [
+        210,
+        72
+      ],
+      "sources": [
+        {
+          "path": "api/v1/plan.ts",
+          "line": 8,
+          "end_line": 13,
+          "label": "Vercel Function GET /api/v1/plan"
+        },
+        {
+          "path": "server/planner/plan.ts",
+          "line": 53,
+          "end_line": 113,
+          "label": "planTrip: cari, harga, urutkan"
+        },
+        {
+          "path": "server/router/raptor.ts",
+          "line": 82,
+          "label": "raptor()"
+        }
+      ]
+    },
+    {
+      "id": "caritempat",
+      "type": "backend",
+      "label": "/places dan /stops",
+      "sublabel": "indeks tempat dan halte",
+      "pos": [
+        670,
+        384
+      ],
+      "size": [
+        210,
+        72
+      ],
+      "sources": [
+        {
+          "path": "api/v1/places.ts",
+          "line": 19,
+          "end_line": 26,
+          "label": "indeks sendiri, more kalau kurang"
+        },
+        {
+          "path": "api/v1/stops.ts",
+          "line": 6,
+          "end_line": 11,
+          "label": "halte dari timetable"
+        },
+        {
+          "path": "src/hooks/usePlaceSearch.ts",
+          "line": 51,
+          "end_line": 60,
+          "label": "dipanggil sambil mengetik"
+        }
+      ]
+    },
+    {
+      "id": "geocode",
+      "type": "backend",
+      "label": "/api/v1/geocode",
+      "sublabel": "cadangan, jawaban nyusul",
+      "pos": [
+        670,
+        564
+      ],
+      "size": [
+        210,
+        64
+      ],
+      "sources": [
+        {
+          "path": "api/v1/geocode.ts",
+          "line": 13,
+          "end_line": 21,
+          "label": "Vercel Function GET /api/v1/geocode"
+        },
+        {
+          "path": "src/hooks/usePlaceSearch.ts",
+          "line": 63,
+          "end_line": 67,
+          "label": "hanya kalau /places bilang more"
+        }
+      ]
+    },
+    {
+      "id": "data",
+      "type": "database",
+      "label": "Data di bundle",
+      "sublabel": "timetable.json, walk.bin, places.json.gz",
+      "pos": [
+        1020,
+        200
+      ],
+      "size": [
+        240,
+        72
+      ],
+      "sources": [
+        {
+          "path": "server/timetable/timetable.ts",
+          "line": 155,
+          "end_line": 156,
+          "label": "jadwal GTFS: timetable.json"
+        },
+        {
+          "path": "server/walk/walking.ts",
+          "line": 124,
+          "end_line": 128,
+          "label": "jalan pejalan kaki: walk.bin"
+        },
+        {
+          "path": "server/places.ts",
+          "line": 460,
+          "end_line": 463,
+          "label": "indeks tempat: places.json.gz"
+        }
+      ]
+    },
+    {
+      "id": "photon",
+      "type": "external",
+      "label": "Photon",
+      "sublabel": "geocoder publik",
+      "pos": [
+        685,
+        724
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "sources": [
+        {
+          "path": "server/geocode.ts",
+          "line": 11,
+          "end_line": 25,
+          "label": "photon.komoot.io atau PHOTON_URL"
+        }
+      ]
+    },
+    {
+      "id": "build",
+      "type": "backend",
+      "label": "pnpm data:build",
+      "sublabel": "di mesin developer, lalu commit",
+      "pos": [
+        1400,
+        200
+      ],
+      "size": [
+        220,
+        72
+      ],
+      "sources": [
+        {
+          "path": "package.json",
+          "line": 16,
+          "end_line": 17,
+          "label": "data:fetch dan data:build"
+        },
+        {
+          "path": "scripts/build-timetable.ts",
+          "line": 23,
+          "end_line": 28,
+          "label": "GTFS jadi timetable.json"
+        },
+        {
+          "path": "scripts/build-osm.ts",
+          "line": 26,
+          "end_line": 43,
+          "label": "OSM jadi walk.bin dan places.json.gz"
+        }
+      ]
+    },
+    {
+      "id": "gtfs",
+      "type": "external",
+      "label": "GTFS TransJakarta",
+      "sublabel": "jadwal resmi",
+      "pos": [
+        1415,
+        40
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "sources": [
+        {
+          "path": "scripts/feeds.ts",
+          "line": 13,
+          "end_line": 20,
+          "label": "feed GTFS resmi TransJakarta"
+        },
+        {
+          "path": "scripts/fetch-gtfs.ts",
+          "line": 11,
+          "label": "diunduh pnpm data:fetch"
+        }
+      ]
+    },
+    {
+      "id": "osm",
+      "type": "external",
+      "label": "OpenStreetMap",
+      "sublabel": "ekstrak Jawa dari Geofabrik",
+      "pos": [
+        1400,
+        384
+      ],
+      "size": [
+        220,
+        64
+      ],
+      "sources": [
+        {
+          "path": "scripts/feeds.ts",
+          "line": 26,
+          "end_line": 27,
+          "label": "ekstrak Jawa Geofabrik"
+        },
+        {
+          "path": "scripts/fetch-osm.ts",
+          "line": 58,
+          "label": "diunduh pnpm data:fetch"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Vercel · sin1",
+      "wraps": [
+        "rencana",
+        "caritempat",
+        "geocode",
+        "data"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "cari-rute",
+      "from": "penumpang",
+      "to": "pwa",
+      "label": "cari rute",
+      "variant": "emphasis"
+    },
+    {
+      "id": "minta-rencana",
+      "from": "pwa",
+      "to": "rencana",
+      "label": "rencana",
+      "variant": "emphasis"
+    },
+    {
+      "id": "baca-data",
+      "from": "rencana",
+      "to": "data",
+      "label": "baca data",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ubin-peta",
+      "from": "pwa",
+      "to": "petaubin",
+      "label": "style, tile"
+    },
+    {
+      "id": "cari-tempat",
+      "from": "pwa",
+      "to": "caritempat",
+      "label": "ketik nama",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "baca-indeks",
+      "from": "caritempat",
+      "to": "data",
+      "label": "baca indeks"
+    },
+    {
+      "id": "kalau-kurang",
+      "from": "pwa",
+      "to": "geocode",
+      "label": "kalau kurang",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "tanya-photon",
+      "from": "geocode",
+      "to": "photon",
+      "label": "cari nama",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "unduh-gtfs",
+      "from": "gtfs",
+      "to": "build",
+      "label": "unduh"
+    },
+    {
+      "id": "unduh-osm",
+      "from": "osm",
+      "to": "build",
+      "label": "unduh"
+    },
+    {
+      "id": "tulis-data",
+      "from": "build",
+      "to": "data",
+      "label": "tulis data/"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "Jalur rencana rute",
+      "items": [
+        "RAPTOR: putaran ke-k mencari tiba paling awal dengan maksimal k kali naik",
+        "Jalan kaki mengikuti graf pejalan kaki OSM di walk.bin, lengkap dengan petunjuk belok",
+        "Tarif dari GTFS ditambah aturan TransJakarta: Rp2.000 pukul 05.00–07.00, transfer 3 jam",
+        "Opsi diurutkan untuk Tercepat, Termurah, dan Termudah"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Cari tempat",
+      "items": [
+        "Halte langsung dari timetable, paham singkatan dan alias",
+        "Indeks sekitar 157 ribu tempat OSM dengan kelurahan, kecamatan, dan kota",
+        "Kurang dari 3 hasil: app bertanya ke Photon, hasilnya menyusul",
+        "Jawaban /places, /stops, dan /geocode di-cache CDN Vercel sehari"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Privasi dan keamanan",
+      "items": [
+        "Tanpa akun; riwayat tempat hanya di perangkat",
+        "Koordinat di URL dibulatkan sekitar 11 m",
+        "CSP ketat dari vercel.json, hash splash dicek saat build",
+        "Rate limit /api/ di Vercel Firewall"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Hosting dan offline",
+      "items": [
+        "Vercel men-deploy main; function berjalan di Singapura (sin1)",
+        "Service worker menyimpan app, style, dan tile peta untuk dibuka lagi tanpa internet"
+      ]
+    }
+  ]
+}
