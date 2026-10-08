@@ -2,6 +2,7 @@
 // answers at once and keeps working when Photon is slow or down.
 
 import type { PlaceResult } from '../shared/api.ts'
+import { agencyName } from '../shared/directions.ts'
 import { distanceM } from './geo.ts'
 import type { Timetable } from './timetable/timetable.ts'
 
@@ -136,7 +137,7 @@ function aliasScores(text: string): Map<string, number> {
   return scores
 }
 
-/** "Halte Transjakarta · 1, 6A, 9 +4", BRT corridors first, or "Dekat Halte Blok M · 1" for a name used elsewhere too. */
+/** "Halte TransJakarta · 1, 6A, 9 +4", BRT corridors first, or "Dekat Halte Blok M · 1" for a name used elsewhere too. */
 function describe(tt: Timetable, routes: number[], near: string | undefined): string {
   const sorted = routes
     .map((r) => tt.routes[r])
@@ -148,7 +149,7 @@ function describe(tt: Timetable, routes: number[], near: string | undefined): st
   const names = [...new Set(sorted.map((r) => r.shortName))]
   const shown = `${names.slice(0, 4).join(', ')}${names.length > 4 ? ` +${names.length - 4}` : ''}`
   // The hint leads, so a narrow screen that cuts the line still shows where it is.
-  return near ? `Dekat Halte ${near} · ${shown}` : `Halte ${sorted[0]?.agency ?? ''} · ${shown}`
+  return near ? `Dekat Halte ${near} · ${shown}` : `Halte ${agencyName(sorted[0]?.agency ?? '')} · ${shown}`
 }
 
 /** Lowercase words with abbreviations spelled out: "Sbr. St. Gambir" → seberang stasiun gambir. */

@@ -38,3 +38,16 @@ test('rejects bad input with a readable message', () => {
   })
   assert.deepEqual(parse(`${trip}&time=besok`), { error: 'Parameter time harus berformat RFC 3339.' })
 })
+
+test('keeps departures to the days the app offers, and names to a sane length', () => {
+  // Tomorrow, and a week ahead (the next day a route runs): fine.
+  assert.ok(!('error' in parse(`${trip}&time=2026-10-07T07:00:00%2B07:00`)))
+  assert.ok(!('error' in parse(`${trip}&time=2026-10-13T07:00:00%2B07:00`)))
+  const outside = { error: 'Waktu berangkat hanya bisa dari kemarin sampai seminggu ke depan.' }
+  assert.deepEqual(parse(`${trip}&time=2027-10-06T07:00:00%2B07:00`), outside)
+  assert.deepEqual(parse(`${trip}&time=2026-10-01T07:00:00%2B07:00`), outside)
+  // A date that does not exist is no date, not the next one.
+  assert.deepEqual(parse(`${trip}&time=2026-02-30T07:00:00%2B07:00`), { error: 'Parameter time harus berformat RFC 3339.' })
+  const long = parse(`${trip}&fromName=${'a'.repeat(5000)}`)
+  assert.ok(!('error' in long) && long.from.name.length === 120)
+})

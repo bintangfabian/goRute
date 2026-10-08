@@ -7,7 +7,7 @@ function describe(state: ServiceState): { label: string; dot: string; live: bool
     case 'loading':
       return { label: 'Menghubungkan…', dot: 'bg-slate-400', live: false }
     case 'offline':
-      return { label: 'Server offline', dot: 'bg-red-500', live: false }
+      return { label: state.network ? 'Tidak ada internet' : 'Server offline', dot: 'bg-red-500', live: false }
     case 'ready': {
       const { feeds } = state.status
       return feeds.length > 0

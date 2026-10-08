@@ -11,8 +11,20 @@ async function get<T>(path: string, query: Record<string, string | number>, sign
   // Cancelled while the body was arriving: the caller asked for nothing anymore.
   signal?.throwIfAborted()
   if (res.ok && body) return { data: body as T }
-  return { error: (body as ApiError | null)?.error ?? `Server membalas ${res.status}.` }
+  return { error: (body as ApiError | null)?.error ?? statusText(res.status) }
 }
+
+/** An answer without our own error message: a timeout or a failure in front of the API, in words. */
+function statusText(status: number): string {
+  if (status === 429) return 'Terlalu banyak permintaan. Tunggu sebentar, lalu coba lagi.'
+  if (status === 504) return 'Server terlalu lama menjawab. Coba lagi sebentar lagi.'
+  if (status >= 500) return 'Server sedang bermasalah. Coba lagi sebentar lagi.'
+  return `Permintaan tidak bisa diproses (${status}).`
+}
+
+/** Why a request never got an answer: the phone being offline says so, rather than blaming the server. */
+export const unreachable = () =>
+  navigator.onLine === false ? 'Kamu sedang offline. Sambungkan internet, lalu coba lagi.' : 'Server tidak bisa dihubungi.'
 
 export type PlanQuery = {
   fromLat: number
