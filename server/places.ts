@@ -43,6 +43,14 @@ const TITLES = new Set(
 )
 /** A street shows again in the results only this far from where it already shows: a long avenue is many pieces. */
 const SAME_STREET_KM = 5
+/**
+ * Initials more than one place has, and the one riders mean wherever they ask
+ * from: RS Citra Medika in Depok spells RSCM as well, but "rscm" is Cipto
+ * Mangunkusumo, from Bogor too. Matched against the name spelled out by words().
+ */
+const KNOWN_INITIALS: Record<string, RegExp> = {
+  rscm: /^rumah sakit (dr )?cipto mangunkusumo$/,
+}
 /** What riders call cities. */
 const CITY_WORDS: Record<string, string[]> = {
   'Jakarta Pusat': ['jakpus'],
@@ -150,6 +158,8 @@ export class PlaceIndex {
       i,
       rank: score - f.weight[i] - (near ? closeness(near, f.lat[i] / COORD, f.lon[i] / COORD) : 0),
     }))
+    const meant = KNOWN_INITIALS[text]
+    if (meant) for (const x of found) if (meant.test(words(f.name[x.i]).join(' '))) x.rank = -Infinity
     found.sort((a, b) => a.rank - b.rank || f.name[a.i].length - f.name[b.i].length)
     const shown: number[] = []
     const streets = new Map<string, number[]>()

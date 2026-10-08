@@ -37,3 +37,11 @@ test('reads campus and landmark initials and the area a query names', () => {
   assert.ok(indomarets.length >= 3 && indomarets.every((p) => p.name === 'Indomaret' && p.address.endsWith(', Depok')), JSON.stringify(indomarets))
   assert.equal(top('monas').address, 'Tempat bersejarah · Gambir, Jakarta Pusat')
 })
+
+test('initials several places share go to the place riders mean, wherever they ask from', () => {
+  const places = loadPlaces()!
+  // RS Citra Medika (Depok) and RS Cibitung Medika spell RSCM too, and are nearer from there.
+  for (const near of [{ lat: -6.3946, lon: 106.8226 }, { lat: -6.2383, lon: 106.9756 }, { lat: -6.595, lon: 106.8166 }]) {
+    assert.equal(places.search('rscm', near)[0].name, 'Rumah Sakit Cipto Mangunkusumo', JSON.stringify(near))
+  }
+})
