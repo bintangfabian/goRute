@@ -8,6 +8,8 @@ async function get<T>(path: string, query: Record<string, string | number>, sign
   const params = new URLSearchParams(Object.entries(query).map(([k, v]) => [k, String(v)]))
   const res = await fetch(`${path}?${params}`, { signal })
   const body: unknown = await res.json().catch(() => null)
+  // Cancelled while the body was arriving: the caller asked for nothing anymore.
+  signal?.throwIfAborted()
   if (res.ok && body) return { data: body as T }
   return { error: (body as ApiError | null)?.error ?? `Server membalas ${res.status}.` }
 }

@@ -15,7 +15,10 @@ import { OSM, RAW_DIR } from './feeds.ts'
 /** Geofabrik refreshes the extract daily; a copy younger than this is kept. */
 const MAX_AGE_DAYS = 7
 
-/** Named features worth searching for (scripts/osm/places.ts decides what each is), and named streets. */
+/**
+ * Named features worth searching for (scripts/osm/places.ts decides what each is), named
+ * streets, and the outlines of cities, districts and villages that say where they are.
+ */
 const PLACE_FILTERS = [
   'nwr/amenity',
   'nwr/shop',
@@ -32,6 +35,7 @@ const PLACE_FILTERS = [
   'nwr/building',
   'nwr/landuse=residential,retail,commercial,industrial',
   'w/highway',
+  'r/admin_level=5,6,7',
 ]
 
 const osmium = (...args: string[]) => execFileSync('osmium', args, { stdio: 'inherit' })
@@ -68,8 +72,8 @@ if (ageDays > MAX_AGE_DAYS) {
 const b = JABODETABEK
 const area = raw('jabodetabek.osm.pbf')
 const named = raw('jabodetabek-named.osm.pbf')
-// "smart" keeps whole ways and the members of area relations that cross the edge.
-osmium('extract', '--overwrite', '--strategy=smart', '-b', `${b.minLon},${b.minLat},${b.maxLon},${b.maxLat}`, '-o', area, java.pathname)
+// "smart" keeps whole ways, and the members of areas and boundaries that cross the edge.
+osmium('extract', '--overwrite', '--strategy=smart', '-S', 'types=multipolygon,boundary', '-b', `${b.minLon},${b.minLat},${b.maxLon},${b.maxLat}`, '-o', area, java.pathname)
 osmium('tags-filter', '--overwrite', '-o', raw(OSM.highways), area, 'w/highway')
 osmium('tags-filter', '--overwrite', '-o', named, area, 'nwr/name')
 osmium('tags-filter', '--overwrite', '-o', raw(OSM.places), named, ...PLACE_FILTERS)

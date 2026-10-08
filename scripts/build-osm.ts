@@ -38,7 +38,7 @@ console.log(
     `${((performance.now() - started) / 1000).toFixed(0)} detik`,
 )
 
-const places = buildPlacesFile(placesPbf.pathname, new Date())
+const places = buildPlacesFile(placesPbf.pathname, new Date(), { lat: [...tt.stopLat], lon: [...tt.stopLon] })
 const placesBytes = gzipSync(JSON.stringify(places), { level: 9 })
 await writeFile(PLACES_FILE, placesBytes)
 const byLabel = new Map<string, number>()
