@@ -21,9 +21,9 @@ PWA, tanpa akun, dan tetap bisa dibuka tanpa internet.
 [![Vite](https://img.shields.io/badge/Vite-8-a855f7?style=flat-square&logo=vite&logoColor=white&labelColor=141414)](https://vite.dev)
 [![MapLibre](https://img.shields.io/badge/peta-MapLibre-396cb2?style=flat-square&logo=maplibre&logoColor=white&labelColor=141414)](https://maplibre.org)
 [![OpenStreetMap](https://img.shields.io/badge/jalan_kaki-OpenStreetMap-7ebc6f?style=flat-square&logo=openstreetmap&logoColor=white&labelColor=141414)](https://www.openstreetmap.org)
-[![Vercel](https://img.shields.io/badge/Vercel-sin1-ffffff?style=flat-square&logo=vercel&logoColor=white&labelColor=141414)](https://vercel.com)
+[![Vercel](https://img.shields.io/badge/Vercel-Singapura-475569?style=flat-square&logo=vercel&logoColor=white&labelColor=141414)](https://vercel.com)
 
-[Fitur](#fitur) · [Cara kerja](#cara-kerja) · [API](#api) · [Mulai lokal](#mulai-lokal) · [Sumber data](#sumber-data) · [Roadmap](#roadmap)
+[Fitur](#fitur) · [Cara kerja](#cara-kerja) · [API](#api) · [Mulai lokal](#mulai-lokal) · [Sumber data](#sumber-data) · [Tanya jawab](#tanya-jawab) · [Roadmap](#roadmap)
 
 </div>
 
@@ -152,15 +152,38 @@ Halte dicari langsung dari jadwal, jadi selalu instan. Tempat dicari dari indeks
 
 ## API
 
-| Endpoint | Fungsi |
-|---|---|
-| `GET /api/v1/status` | Feed yang dimuat dan waktu build data |
-| `GET /api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]` | Opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi. Leg jalan kaki membawa `steps` (petunjuk belok); leg bus membawa `headsign` (arah) dan `stops` (halte yang dilewati). `time` (RFC 3339) adalah jam berangkat, dari kemarin sampai sepekan ke depan; tanpa `time` dipakai jam server. Kalau tidak ada opsi, `reason` menjelaskan sebabnya: `far-from-origin`/`far-from-destination`, `no-service-near-origin`/`no-service-near-destination` (dengan `nextServiceDate`), atau `no-trip` |
-| `GET /api/v1/stops?q=` | Cari halte dari timetable: instan, paham singkatan (St., Ps., Sbr.) dan alias (Monas, GBK); halte yang namanya dipakai di beberapa tempat diberi petunjuk "Dekat Halte X" |
-| `GET /api/v1/places?q=[&lat&lon]` | Cari tempat dari indeks OSM sendiri: instan, dengan kategori ("Mal", "Stasiun", "Jalan") dan wilayahnya ("Pondok Cina, Depok"). Paham nama wilayah dan jenis tempat ("ui depok", "rs fatmawati"), singkatan (UNJ, RSCM, PIM, GBK), spasi yang beda ("atma jaya" = Atmajaya), dan cabang dekat landmark ("kfc blok m", "mcd sarinah": dalam 800 m). `lat`/`lon` (ujung perjalanan yang lain) mendahulukan tempat yang dekat. Kalau hasilnya kurang dari 3, jawabannya membawa `more: true` |
-| `GET /api/v1/geocode?q=[&lat&lon]` | Cari tempat lewat Photon publik (lambat, 2–9 detik), dipanggil app hanya kalau `/places` bilang `more`. Kalau Photon gagal, jawabannya tidak di-cache |
+Semua endpoint `GET`, menjawab JSON, dan bentuk responsnya ada di [`shared/api.ts`](shared/api.ts).
 
-Bentuk respons ada di [`shared/api.ts`](shared/api.ts).
+| Endpoint | Fungsi | Cache CDN |
+| --- | --- | :---: |
+| `/api/v1/plan` | Opsi perjalanan: langkah, tarif, garis rute, dan tiga urutan | tidak |
+| `/api/v1/places` | Tempat dari indeks OSM sendiri, instan | 1 hari |
+| `/api/v1/stops` | Halte dari timetable, instan | 1 hari |
+| `/api/v1/geocode` | Photon publik, cadangan kalau `/places` kurang | 1 hari |
+| `/api/v1/status` | Feed yang dimuat dan waktu build data | 5 menit |
+
+Coba langsung ke produksi:
+
+```bash
+# Cabang dekat landmark
+curl "https://gorute.vercel.app/api/v1/places?q=kfc%20blok%20m"
+
+# Kampung Melayu ke GBK, berangkat sekarang
+curl "https://gorute.vercel.app/api/v1/plan?fromLat=-6.2246&fromLon=106.8667&toLat=-6.2184&toLon=106.8023"
+```
+
+<details>
+<summary><b>Parameter dan isi jawaban</b></summary>
+
+**`/api/v1/plan?fromLat&fromLon&toLat&toLon[&fromName&toName&time]`**: opsi perjalanan lengkap dengan tarif, garis rute, dan urutan untuk tiap preferensi. Leg jalan kaki membawa `steps` (petunjuk belok); leg bus membawa `headsign` (arah) dan `stops` (halte yang dilewati). `time` (RFC 3339) adalah jam berangkat, dari kemarin sampai sepekan ke depan; tanpa `time` dipakai jam server. Web app selalu mengirim `time`, jadi label di kartu dihitung dari jam yang sama dengan rutenya. Kalau tidak ada opsi, `reason` menjelaskan sebabnya: `far-from-origin`/`far-from-destination` (tidak ada halte dalam 2,5 km), `no-service-near-origin`/`no-service-near-destination` (tidak ada bus di sekitarnya hari itu; `nextServiceDate` berisi tanggal berikutnya, dalam sepekan, saat ada bus di sekitar asal dan tujuan), atau `no-trip`.
+
+**`/api/v1/places?q=[&lat&lon]`**: tempat dari indeks OSM sendiri (`data/places.json.gz`), dengan kategori ("Mal", "Stasiun", "Jalan") dan wilayahnya ("Pondok Cina, Depok"). Paham nama wilayah dan jenis tempat ("ui depok", "rs fatmawati"), singkatan (UNJ, RSCM, PIM, GBK, Untar), spasi yang beda ("atma jaya" = Atmajaya), dan cabang dekat landmark ("kfc blok m", "mcd sarinah": cabang dalam 800 m dari tempat yang disebut). `lat`/`lon` (ujung perjalanan yang lain) mendahulukan tempat yang dekat. Kalau hasilnya kurang dari 3, jawabannya membawa `more: true`.
+
+**`/api/v1/stops?q=`**: halte dari timetable, paham singkatan (St., Ps., Sbr.) dan alias (Monas, GBK). Halte yang namanya dipakai di beberapa tempat diberi petunjuk "Dekat Halte X".
+
+**`/api/v1/geocode?q=[&lat&lon]`**: tempat lewat [Photon](https://photon.komoot.io) publik (lambat, 2–9 detik). App memanggilnya hanya kalau `/places` bilang `more`, dan hasilnya tampil menyusul di bawah hasil indeks. Kalau Photon gagal, jawabannya tidak di-cache.
+
+</details>
 
 ## Mulai lokal
 
@@ -244,7 +267,14 @@ Batas plan Hobby yang relevan: hanya untuk penggunaan non-komersial, 4 jam CPU a
 ## Desain
 
 - **Logo** ([`public/favicon.svg`](public/favicon.svg)): huruf *g* yang mangkuknya titik asal dan ekornya rute ke halte tujuan (cincin amber). Lolos uji 16 px, satu warna, dan latar gelap. `pnpm build` menurunkan favicon, ikon PWA, ikon *maskable*, dan ikon Apple dari file ini.
-- **Warna**: hijau `#0f766e` untuk brand dan asal, amber `#fbbf24` untuk tujuan, dan warna resmi tiap koridor untuk garis rute.
+- **Warna**: hijau untuk brand dan asal, amber untuk tujuan, dan warna resmi tiap koridor untuk garis rute.
+
+  ![brand #0f766e](https://img.shields.io/badge/brand-%230f766e-0f766e?style=for-the-badge&labelColor=0f766e)
+  ![brand-soft #ccfbf1](https://img.shields.io/badge/brand--soft-%23ccfbf1-ccfbf1?style=for-the-badge&labelColor=ccfbf1)
+  ![accent #fbbf24](https://img.shields.io/badge/accent-%23fbbf24-fbbf24?style=for-the-badge&labelColor=fbbf24)
+  ![teks #0f172a](https://img.shields.io/badge/teks-%230f172a-0f172a?style=for-the-badge&labelColor=0f172a)
+  ![latar #f1f5f9](https://img.shields.io/badge/latar-%23f1f5f9-f1f5f9?style=for-the-badge&labelColor=f1f5f9)
+
 - **Splash** di `index.html` (logo digambar seperti rute) tampil sebelum JavaScript dimuat. Panel masuk saat splash memudar. Kalau app tidak pernah tampil, splash mundur sendiri setelah 10 detik dan memperlihatkan tombol Muat ulang.
 - **Ilustrasi & animasi**: tiap keadaan panel (siap cari, belum ada bus, bus libur hari itu, halte terlalu jauh, server gagal, asal = tujuan) punya ilustrasi SVG beranimasi. Detail rute masuk dari kanan, daftar dari kiri, dan garis rute tidak digambar ulang kalau jawaban baru memakai garis yang sama.
 - **Peta**: style Positron OpenFreeMap disetel di [`mapStyle.ts`](src/components/map/mapStyle.ts): nama sungai dan jalan setapak lebih kontras, *shield* jalan AS dibuang. Garis rute di bawah label, jadi nama jalan yang disebut petunjuk tetap terbaca.
@@ -281,6 +311,36 @@ flowchart LR
 | Pencarian tempat | Halte dari timetable + indeks tempat OSM sendiri; Photon publik sebagai cadangan | ✅ Instan; Photon publik lambat (7–9 detik), jadi hanya cadangan |
 
 Peta © [OpenFreeMap](https://openfreemap.org) · © [OpenMapTiles](https://www.openmaptiles.org) · Data © [kontributor OpenStreetMap](https://www.openstreetmap.org/copyright).
+
+## Tanya jawab
+
+<details>
+<summary><b>Kenapa KRL, MRT, dan LRT belum ada?</b></summary>
+
+KRL tidak punya GTFS resmi: jadwalnya harus diambil dari web KAI Commuter, lewat endpoint yang tidak resmi dan butuh token. MRT dan LRT akan dibuat sebagai GTFS manual di `data/manual/`, lengkap dengan titik transfer antarmoda. Keduanya ada di [roadmap](#roadmap). Sampai saat itu goRute hanya menyarankan TransJakarta dan jalan kaki.
+
+</details>
+
+<details>
+<summary><b>Apakah lokasi saya disimpan?</b></summary>
+
+goRute tidak menyimpannya: tidak ada akun atau database. Koordinat, termasuk dari GPS, dibulatkan sekitar 11 m sebelum dikirim untuk menghitung rute. Kode goRute tidak menulis isi pencarian atau koordinat ke log, tapi alamat permintaan (dengan koordinat yang sudah dibulatkan) tetap tercatat di log request Vercel, seperti situs lain yang di-host di sana. Riwayat "Terakhir dicari" hanya ada di browser kamu dan bisa dihapus dari daftarnya.
+
+</details>
+
+<details>
+<summary><b>Seberapa akurat jam di kartu?</b></summary>
+
+Jamnya dari jadwal resmi TransJakarta yang berbasis interval ("tiap 10 menit"), bukan posisi bus secara langsung. Jalan kaki dihitung 4,5 km/jam lewat jalan sungguhan. Anggap jamnya perkiraan yang jujur: kalau busnya baru ada nanti, kartu bilang "Berangkat 45 mnt lagi" atau "Berangkat besok 05.30", bukan pura-pura berangkat sekarang.
+
+</details>
+
+<details>
+<summary><b>Kenapa tempat yang saya cari tidak ketemu?</b></summary>
+
+Indeks kita berisi tempat yang dipetakan di OpenStreetMap. Kalau hasilnya kurang dari tiga, goRute bertanya ke Photon dan menunggu jawabannya sampai 4 detik. Kalau tetap tidak ada, ketuk lokasinya langsung di peta.
+
+</details>
 
 ## Roadmap
 
