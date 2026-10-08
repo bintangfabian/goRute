@@ -38,10 +38,28 @@ test('reads campus and landmark initials and the area a query names', () => {
   assert.equal(top('monas').address, 'Tempat bersejarah · Gambir, Jakarta Pusat')
 })
 
-test('initials several places share go to the place riders mean, wherever they ask from', () => {
+test('short names go to the place riders mean, wherever they ask from', () => {
   const places = loadPlaces()!
-  // RS Citra Medika (Depok) and RS Cibitung Medika spell RSCM too, and are nearer from there.
-  for (const near of [{ lat: -6.3946, lon: 106.8226 }, { lat: -6.2383, lon: 106.9756 }, { lat: -6.595, lon: 106.8166 }]) {
-    assert.equal(places.search('rscm', near)[0].name, 'Rumah Sakit Cipto Mangunkusumo', JSON.stringify(near))
+  const cases: [string, RegExp][] = [
+    // RS Citra Medika (Depok) and RS Cibitung Medika spell RSCM too, and are nearer from there.
+    ['rscm', /^Rumah Sakit Cipto Mangunkusumo$/],
+    // Bekasi Timur and every other "Timur" start with "tim"; the museum of Istiqlal is in TMII.
+    ['tim', /^Taman Ismail Marzuki$/],
+    ['istiqlal', /^Masjid Istiqlal$/],
+    ['gbk', /^Stadion Utama Gelora Bung Karno$/],
+    ['kokas', /^Kota Kasablanka$/],
+    ['unj', /^Universitas Negeri Jakarta$/],
+    ['cgk', /^Bandar Udara Internasional Soekarno-Hatta$/],
+  ]
+  // Depok, Bekasi, Bogor, Tangerang and Tanjung Priok.
+  const from = [
+    { lat: -6.3946, lon: 106.8226 },
+    { lat: -6.2383, lon: 106.9756 },
+    { lat: -6.595, lon: 106.8166 },
+    { lat: -6.1783, lon: 106.6319 },
+    { lat: -6.11, lon: 106.88 },
+  ]
+  for (const [q, want] of cases) {
+    for (const near of from) assert.match(places.search(q, near)[0].name, want, `${q} from ${JSON.stringify(near)}`)
   }
 })

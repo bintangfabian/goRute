@@ -5,6 +5,7 @@ import { PLACES_VERSION, PlaceIndex, type PlacesFile } from './places.ts'
 type TestPlace = {
   name: string
   alt?: string
+  nicknames?: string
   initials?: string
   label: string
   weight: number
@@ -27,6 +28,7 @@ function index(places: TestPlace[]): PlaceIndex {
     regions: regionKeys.flatMap((k) => [...k.split('|').map((a) => areas.indexOf(a)), -1]),
     name: places.map((p) => p.name),
     alt: places.map((p) => p.alt ?? ''),
+    nicknames: places.map((p) => p.nicknames ?? ''),
     initials: places.map((p) => p.initials ?? ''),
     lat: places.map((p) => Math.round(p.lat * 1e5)),
     lon: places.map((p) => Math.round(p.lon * 1e5)),
@@ -125,4 +127,18 @@ test('finds initials only when typed whole, and names written with other spaces'
   // Two letters only find a whole name or whole initials.
   assert.deepEqual(found('pi'), [])
   assert.deepEqual(found('atma jaya'), ['Universitas Atmajaya'])
+})
+
+test('puts the place a nickname names first, however near other matches are', () => {
+  const BEKASI = { lat: -6.24, lon: 106.98 }
+  const near = index([
+    { name: 'Taman Ismail Marzuki', nicknames: 'TIM', label: 'Kawasan', weight: 1, lat: -6.189, lon: 106.84 },
+    { name: 'Bekasi Timur', label: 'Stasiun', weight: 3, lat: -6.247, lon: 107.018 },
+    { name: 'Masjid Istiqlal', nicknames: 'Istiqlal', label: 'Masjid', weight: 2.5, lat: -6.17, lon: 106.831 },
+    { name: 'Bayt Al Quran dan Museum Islam Istiqlal', label: 'Museum', weight: 3, lat: -6.3, lon: 106.89 },
+  ])
+  assert.equal(near.search('tim', BEKASI)[0].name, 'Taman Ismail Marzuki')
+  assert.equal(near.search('istiqlal', BEKASI)[0].name, 'Masjid Istiqlal')
+  // Only typed whole: half of it is still everything that starts so.
+  assert.equal(near.search('timu', BEKASI)[0].name, 'Bekasi Timur')
 })

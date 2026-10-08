@@ -74,9 +74,10 @@ const ESTATES = new Set(['suburb', 'quarter', 'neighbourhood'])
 const UNINITIALED = new Set(['dan', 'di', 'ke', 'dr', 'prof', 'h', 'hj', 'ir'])
 
 /**
- * What riders call places whose names say otherwise, matched against the whole
- * name spelled out by words(). Initials (UNJ, RSCM) and names mapped in
- * OpenStreetMap (UI, PIM, Sency) need no entry.
+ * What riders call places, matched against the whole name spelled out by words().
+ * Typed whole, a nickname finds its place first wherever the rider is: "tim" is
+ * Taman Ismail Marzuki from Bekasi too, not Bekasi Timur. Initials no other place
+ * shares (UNJ) and names mapped in OpenStreetMap (UI, PIM, Sency) need no entry.
  */
 const NICKNAMES: [nickname: string, name: RegExp, city?: string][] = [
   ['Ambassador', /^mall ambasador$/],
@@ -84,6 +85,7 @@ const NICKNAMES: [nickname: string, name: RegExp, city?: string][] = [
   ['Gedung DPR', /^dewan perwakilan rakyat\b/],
   ['MPR', /\bmajelis permusyawaratan rakyat$/],
   ['FX Sudirman', /^fx mall$/],
+  ['Istiqlal', /^masjid istiqlal$/],
   ['GBK', /^stadion utama gelora bung karno$/],
   ['Jalan MH Thamrin', /^jalan mohammad husni thamrin$/],
   ['MH Thamrin', /^jalan mohammad husni thamrin$/],
@@ -93,6 +95,8 @@ const NICKNAMES: [nickname: string, name: RegExp, city?: string][] = [
   ['Museum Gajah', /^museum nasional( indonesia)?$/],
   ['Pasar Tanah Abang', /^tanah abang market$/],
   ['PRJ', /^jiexpo\b/],
+  // RS Citra Medika and RS Cibitung Medika spell RSCM too, and are nearer from Depok and Bekasi.
+  ['RSCM', /^rumah sakit (dr )?cipto mangunkusumo$/],
   ['Soetta', /^bandar udara internasional soekarno hatta$/],
   ['Tanjung Priok', /^tanjung priuk$/],
   ['TIM', /^taman ismail marzuki$/],
@@ -183,7 +187,7 @@ function areaLevel(t: Tags): Level | null {
   return ESTATES.has(t.get('place') ?? '') ? 'estate' : null
 }
 
-type Candidate = { name: string; alt: string[]; lat: number; lon: number; kind: Kind; notable: boolean }
+type Candidate = { name: string; alt: string[]; nicknames?: string[]; lat: number; lon: number; kind: Kind; notable: boolean }
 
 const notable = (t: Tags) => t.has('wikidata') || t.has('wikipedia')
 
@@ -437,7 +441,7 @@ export function buildPlacesFile(pbfPath: string, builtAt: Date, haltes: { lat: n
   kept.forEach((p, i) => {
     const text = words(p.name).join(' ')
     for (const [nickname, name, city] of NICKNAMES) {
-      if (name.test(text) && (!city || city === where[i][2]) && !p.alt.includes(nickname)) p.alt.push(nickname)
+      if (name.test(text) && (!city || city === where[i][2])) p.nicknames = [...(p.nicknames ?? []), nickname]
     }
   })
 
@@ -456,12 +460,13 @@ export function buildPlacesFile(pbfPath: string, builtAt: Date, haltes: { lat: n
 
   // Initials only for places that matter, and none that another such place is already called by:
   // Puri Indah Mall is no "pim", that is Pondok Indah Mall.
-  const taken = new Set(kept.filter((p) => p.kind.weight >= 3).flatMap((p) => p.alt.map((a) => words(a)[0])))
+  const calledBy = (p: Candidate) => [...p.alt, ...(p.nicknames ?? [])].map((a) => words(a)[0])
+  const taken = new Set([...kept.filter((p) => p.kind.weight >= 3).flatMap(calledBy), ...kept.flatMap((p) => (p.nicknames ?? []).map((n) => words(n)[0]))])
   const initialsOf = (p: Candidate) => {
     if (p.kind.weight < 3 || p.kind.label === 'Jalan') return ''
     const found = initials(p.name)
     const letters = found.split(' ')[0]
-    return found && taken.has(letters) && !p.alt.some((a) => words(a)[0] === letters) ? '' : found
+    return found && taken.has(letters) && !calledBy(p).includes(letters) ? '' : found
   }
 
   const labels: string[] = []
@@ -486,6 +491,7 @@ export function buildPlacesFile(pbfPath: string, builtAt: Date, haltes: { lat: n
     regions,
     name: [],
     alt: [],
+    nicknames: [],
     initials: [],
     lat: [],
     lon: [],
@@ -509,6 +515,7 @@ export function buildPlacesFile(pbfPath: string, builtAt: Date, haltes: { lat: n
     }
     file.name.push(p.name)
     file.alt.push(p.alt.join('|'))
+    file.nicknames.push((p.nicknames ?? []).join('|'))
     file.initials.push(initialsOf(p))
     file.lat.push(Math.round(p.lat * COORD))
     file.lon.push(Math.round(p.lon * COORD))

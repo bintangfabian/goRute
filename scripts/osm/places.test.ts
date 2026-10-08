@@ -138,6 +138,7 @@ test('says which village, district and city each place is in, from their outline
           { id: 21, lat: -6.38, lon: 106.82, tags: { name: 'Universitas Uji Negeri', amenity: 'university' } },
           { id: 22, lat: -6.32, lon: 106.88, tags: { name: 'Mal Uji', shop: 'mall' } },
           { id: 23, lat: -6.2, lon: 106.8, tags: { name: 'Toko Jauh', shop: 'bakery' } },
+          { id: 25, lat: -6.31, lon: 106.81, tags: { name: 'Taman Ismail Marzuki', landuse: 'commercial' } },
           { id: 24, lat: -6.205, lon: 106.8, tags: { name: 'Kampung Jauh', place: 'neighbourhood' } },
         ],
         ways: [ring(100, 1), ring(101, 11)],
@@ -154,6 +155,8 @@ test('says which village, district and city each place is in, from their outline
     assert.deepEqual(at('Mal Uji'), { area: 'Kecamatan Uji', region: ['', 'Kecamatan Uji', 'Kab. Uji', ''], initials: '' })
     // Outside every outline, the nearest named neighbourhood still says where it is.
     assert.deepEqual(at('Toko Jauh'), { area: 'Kampung Jauh', region: [], initials: '' })
+    // What riders call a place is kept apart from its other names, so typed whole it comes first.
+    assert.equal(f.nicknames[f.name.indexOf('Taman Ismail Marzuki')], 'TIM')
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

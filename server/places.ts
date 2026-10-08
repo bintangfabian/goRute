@@ -7,7 +7,7 @@ import { gunzipSync } from 'node:zlib'
 import type { PlaceResult } from '../shared/api.ts'
 import { words } from './stops.ts'
 
-export const PLACES_VERSION = 2
+export const PLACES_VERSION = 3
 const COORD = 1e5
 const MAX_RESULTS = 6
 /** What a match costs when words of the query only name the area it is in: "depok" in "ui depok". */
@@ -43,14 +43,6 @@ const TITLES = new Set(
 )
 /** A street shows again in the results only this far from where it already shows: a long avenue is many pieces. */
 const SAME_STREET_KM = 5
-/**
- * Initials more than one place has, and the one riders mean wherever they ask
- * from: RS Citra Medika in Depok spells RSCM as well, but "rscm" is Cipto
- * Mangunkusumo, from Bogor too. Matched against the name spelled out by words().
- */
-const KNOWN_INITIALS: Record<string, RegExp> = {
-  rscm: /^rumah sakit (dr )?cipto mangunkusumo$/,
-}
 /** What riders call cities. */
 const CITY_WORDS: Record<string, string[]> = {
   'Jakarta Pusat': ['jakpus'],
@@ -73,6 +65,8 @@ export type PlacesFile = {
   name: string[]
   /** Other names joined by "|": short, alternative, official, brand. */
   alt: string[]
+  /** What riders call the place ("TIM", "Istiqlal"), joined by "|": typed whole, the place comes first wherever the rider is. */
+  nicknames: string[]
   /** Initials of a long name ("unj", "pim 2"), found only as whole words; "" for none. */
   initials: string[]
   /** In 1e-5 degrees. */
@@ -92,6 +86,8 @@ export class PlaceIndex {
   readonly file: PlacesFile
   /** Normalized words of each name and its alternatives. */
   private readonly forms: string[][][]
+  /** Each place's nicknames as words() spells them, null for none. */
+  private readonly nicknames: (string[] | null)[]
   /** All words of each place's names and initials, each after a space, to rule places out at a glance. */
   private readonly allWords: string[]
   /** All forms of each name without spaces, to find "atma jaya" in Atmajaya at a glance. */
@@ -110,8 +106,10 @@ export class PlaceIndex {
     if (file.version !== PLACES_VERSION) throw new Error(`places version ${file.version}, expected ${PLACES_VERSION}; run pnpm data:build`)
     this.file = file
     const street = file.labels.indexOf('Jalan')
+    this.nicknames = file.nicknames.map((s) => (s ? s.split('|').map((n) => words(n).join(' ')) : null))
     this.forms = file.name.map((name, i) => {
-      const forms = [name, ...(file.alt[i] ? file.alt[i].split('|') : [])].map((n) => words(n))
+      const others = [...(file.alt[i] ? file.alt[i].split('|') : []), ...(file.nicknames[i] ? file.nicknames[i].split('|') : [])]
+      const forms = [name, ...others].map((n) => words(n))
       if (file.kind[i] !== street) return forms
       const untitled = forms.map((form) => form.filter((w) => !TITLES.has(w))).filter((form, k) => form.length !== forms[k].length)
       return [...forms, ...untitled]
@@ -158,9 +156,9 @@ export class PlaceIndex {
       i,
       rank: score - f.weight[i] - (near ? closeness(near, f.lat[i] / COORD, f.lon[i] / COORD) : 0),
     }))
-    const meant = KNOWN_INITIALS[text]
-    if (meant) for (const x of found) if (meant.test(words(f.name[x.i]).join(' '))) x.rank = -Infinity
-    found.sort((a, b) => a.rank - b.rank || f.name[a.i].length - f.name[b.i].length)
+    // A nickname typed whole means its place, however near anything else that matches is.
+    const meant = (i: number) => (this.nicknames[i]?.includes(text) ? 0 : 1)
+    found.sort((a, b) => meant(a.i) - meant(b.i) || a.rank - b.rank || f.name[a.i].length - f.name[b.i].length)
     const shown: number[] = []
     const streets = new Map<string, number[]>()
     for (const { i } of found) {
@@ -402,8 +400,9 @@ export function loadPlaces(): PlaceIndex | null {
     const raw = gunzipSync(readFileSync(new URL('../data/places.json.gz', import.meta.url)))
     loaded = new PlaceIndex(JSON.parse(raw.toString('utf8')) as PlacesFile)
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
-    console.warn('data/places.json.gz tidak ada: pencarian tempat hanya lewat geocoder. Jalankan pnpm data:build.')
+    // Missing or from another version, the index is left out once, not on every request.
+    const missing = (err as NodeJS.ErrnoException).code === 'ENOENT'
+    console.warn(`data/places.json.gz ${missing ? 'tidak ada' : `tidak terbaca (${(err as Error).message})`}: pencarian tempat hanya lewat geocoder. Jalankan pnpm data:build.`)
     loaded = null
   }
   return loaded
