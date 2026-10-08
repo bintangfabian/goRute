@@ -10,7 +10,9 @@ const MAX_RESULTS = 6
 /** Places for a query, nearer `near` (the other end of the trip) first; without it, nearer the middle of Jabodetabek. */
 export async function searchPlaces(query: string, signal?: AbortSignal, near?: { lat: number; lon: number }): Promise<PlaceResult[]> {
   const b = JABODETABEK
-  const url = new URL('/api/', process.env.PHOTON_URL || 'https://photon.komoot.io')
+  // Relative to the base, so a self-hosted Photon behind a path prefix (https://x/photon/) works too.
+  const base = process.env.PHOTON_URL || 'https://photon.komoot.io'
+  const url = new URL('api/', base.endsWith('/') ? base : `${base}/`)
   url.search = new URLSearchParams({
     q: query,
     limit: String(MAX_RESULTS * 2), // headroom for duplicates

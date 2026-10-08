@@ -42,11 +42,11 @@ export function usePlan(
     api
       .plan(
         {
-          fromLat: origin.lat,
-          fromLon: origin.lon,
+          fromLat: rounded(origin.lat),
+          fromLon: rounded(origin.lon),
           fromName: origin.name,
-          toLat: destination.lat,
-          toLon: destination.lon,
+          toLat: rounded(destination.lat),
+          toLon: rounded(destination.lon),
           toName: destination.name,
           time: new Date(departure).toISOString(),
         },
@@ -72,3 +72,9 @@ export function usePlan(
   }
   return settled.state
 }
+
+/**
+ * Coordinates to about 11 m, plenty for a walk that snaps onto paths anyway: a GPS fix
+ * to the centimetre would otherwise sit in the request URL and in server logs.
+ */
+const rounded = (degrees: number) => Math.round(degrees * 1e4) / 1e4

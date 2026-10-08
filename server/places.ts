@@ -28,6 +28,8 @@ const TYPO_PENALTY = 1.5
 const FEW = 3
 /** A word this many names use is no typo. */
 const COMMON_WORD = 50
+/** Typos are looked for in this many words of a query at most: each look reads every word of every name. */
+const MAX_TYPO_WORDS = 3
 /**
  * "kfc blok m": a place of one name near a place of another, when nothing is named both.
  * Found this close to the second place, and coming after places matching the whole query.
@@ -41,6 +43,8 @@ const LANDMARK_WEIGHT = 2.5
 const AREA_LABELS = new Set(['Kota', 'Kawasan', 'Kelurahan', 'Lingkungan', 'Perumahan', 'Jalan'])
 /** Places nearer than this to a landmark are listed, at most. */
 const MAX_LANDMARKS = 40
+/** "x near y" is tried with the place named in at most this many words: "kfc blok m", "halte gelora bung karno". */
+const MAX_WHERE_WORDS = 3
 /** Other words riders use for a kind of place. */
 const KIND_WORDS: Record<string, string[]> = {
   Bandara: ['airport', 'bandar', 'udara'],
@@ -233,7 +237,7 @@ export class PlaceIndex {
    */
   private matchNear(q: string[], scores: Map<number, number>) {
     const f = this.file
-    for (let split = q.length - 1; split >= 1; split--) {
+    for (let split = q.length - 1; split >= Math.max(1, q.length - MAX_WHERE_WORDS); split--) {
       const what = q.slice(0, split)
       const where = q.slice(split)
       while (where.length > 1 && NEAR_WORDS.has(where[0])) where.shift()
@@ -284,11 +288,13 @@ export class PlaceIndex {
   private corrected(q: string[]): Typed[] {
     this.vocabulary ??= vocabularyOf(this.forms)
     const { words: known, uses } = this.vocabulary
+    let looked = 0
     const options = q.map((w, k) => {
       // Short words, numbers, and words many names use are what they look like.
       if (w.length < 4 || /\d/.test(w) || (uses.get(w) ?? 0) >= COMMON_WORD) return [w]
       // The last word may still be half typed.
       if (k === q.length - 1 && !uses.has(w) && startsSome(known, w)) return [w]
+      if (looked++ >= MAX_TYPO_WORDS) return [w]
       const most = w.length >= 8 ? 2 : 1
       const near = known.filter((v) => v !== w && Math.abs(v.length - w.length) <= most && typos(w, v, most) <= most)
       near.sort((a, b) => uses.get(b)! - uses.get(a)!)
