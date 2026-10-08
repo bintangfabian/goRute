@@ -162,6 +162,49 @@ test('says which village, district and city each place is in, from their outline
   }
 })
 
+test('gives a nickname tied to a city only to the place in that city', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'gorute-places-'))
+  try {
+    // Jakarta Pusat from (-6.20, 106.80) to (-6.15, 106.85); the same street name in it and far outside it.
+    writeFileSync(
+      join(dir, 'places.osm.pbf'),
+      writePbf({
+        nodes: [
+          { id: 1, lat: -6.2, lon: 106.8 },
+          { id: 2, lat: -6.2, lon: 106.85 },
+          { id: 3, lat: -6.15, lon: 106.85 },
+          { id: 4, lat: -6.15, lon: 106.8 },
+          { id: 11, lat: -6.19, lon: 106.82 },
+          { id: 12, lat: -6.17, lon: 106.82 },
+          { id: 21, lat: -6.3, lon: 107.1 },
+          { id: 22, lat: -6.28, lon: 107.1 },
+        ],
+        ways: [
+          { id: 100, refs: [1, 2, 3, 4, 1] },
+          { id: 101, refs: [11, 12], tags: { highway: 'primary', name: 'Jalan Mohammad Husni Thamrin' } },
+          { id: 102, refs: [21, 22], tags: { highway: 'primary', name: 'Jalan Mohammad Husni Thamrin' } },
+        ],
+        relations: [
+          {
+            id: 200,
+            members: [{ type: 'way', ref: 100, role: 'outer' }],
+            tags: { type: 'boundary', boundary: 'administrative', admin_level: '5', name: 'Kota Administrasi Jakarta Pusat' },
+          },
+        ],
+      }),
+    )
+    const f = buildPlacesFile(join(dir, 'places.osm.pbf'), new Date('2026-10-08'))
+    const thamrin = f.name.flatMap((name, i) => (name === 'Jalan Mohammad Husni Thamrin' ? [{ lat: f.lat[i], nicknames: f.nicknames[i] }] : []))
+    assert.equal(thamrin.length, 2, JSON.stringify(thamrin))
+    assert.deepEqual(
+      thamrin.sort((a, b) => b.lat - a.lat).map((t) => t.nicknames),
+      ['Jalan MH Thamrin|MH Thamrin', ''],
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('keeps train stations, leaves haltes to the halte search, and drops what is closed or far', () => {
   const dir = mkdtempSync(join(tmpdir(), 'gorute-places-'))
   try {

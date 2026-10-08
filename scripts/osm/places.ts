@@ -87,8 +87,9 @@ const NICKNAMES: [nickname: string, name: RegExp, city?: string][] = [
   ['FX Sudirman', /^fx mall$/],
   ['Istiqlal', /^masjid istiqlal$/],
   ['GBK', /^stadion utama gelora bung karno$/],
-  ['Jalan MH Thamrin', /^jalan mohammad husni thamrin$/],
-  ['MH Thamrin', /^jalan mohammad husni thamrin$/],
+  // The avenue in Jakarta Pusat: Bekasi and Tangerang have a Jalan MH Thamrin too, nearer from Bogor.
+  ['Jalan MH Thamrin', /^jalan mohammad husni thamrin$/, 'Jakarta Pusat'],
+  ['MH Thamrin', /^jalan mohammad husni thamrin$/, 'Jakarta Pusat'],
   ['Jalan Sabang', /^jalan haji agus salim$/, 'Jakarta Pusat'],
   ['Kokas', /^kota kasablanka$/],
   ['KPK', /^komisi pemberantasan korupsi$/],
