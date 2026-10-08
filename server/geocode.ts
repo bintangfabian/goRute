@@ -7,15 +7,16 @@ import { JABODETABEK } from '../shared/region.ts'
 const USER_AGENT = 'goRute/0.1 (+https://github.com/bintangfabian/goRute)'
 const MAX_RESULTS = 6
 
-export async function searchPlaces(query: string, signal?: AbortSignal): Promise<PlaceResult[]> {
+/** Places for a query, nearer `near` (the other end of the trip) first; without it, nearer the middle of Jabodetabek. */
+export async function searchPlaces(query: string, signal?: AbortSignal, near?: { lat: number; lon: number }): Promise<PlaceResult[]> {
   const b = JABODETABEK
   const url = new URL('/api/', process.env.PHOTON_URL || 'https://photon.komoot.io')
   url.search = new URLSearchParams({
     q: query,
     limit: String(MAX_RESULTS * 2), // headroom for duplicates
     bbox: [b.minLon, b.minLat, b.maxLon, b.maxLat].join(','),
-    lat: ((b.minLat + b.maxLat) / 2).toFixed(4),
-    lon: ((b.minLon + b.maxLon) / 2).toFixed(4),
+    lat: (near?.lat ?? (b.minLat + b.maxLat) / 2).toFixed(4),
+    lon: (near?.lon ?? (b.minLon + b.maxLon) / 2).toFixed(4),
   }).toString()
 
   const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal })
