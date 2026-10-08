@@ -144,8 +144,10 @@ export function PlannerSheet(props: Props) {
         expanded ? 'max-h-[88dvh] min-h-[88dvh]' : withButton ? 'max-h-[70dvh] min-h-0' : 'max-h-[62dvh] min-h-0'
       } lg:inset-y-4 lg:right-auto lg:left-4 lg:mx-0 lg:max-h-none lg:min-h-0 lg:w-[420px] lg:max-w-none lg:rounded-3xl lg:shadow-[0_12px_40px_rgb(0,0,0,0.14)]`}
     >
+      {/* The top of the sheet lies over the scrolling area below by 2 px: iOS Safari lets
+          a pixel of what scrolled past show above that area's edge. */}
       {wide ? (
-        <BrandBar state={props.status} className="px-5 pt-5" />
+        <BrandBar state={props.status} className="relative z-30 -mb-0.5 rounded-t-3xl bg-white px-5 pt-5 pb-0.5" />
       ) : (
         <motion.button
           type="button"
@@ -153,7 +155,7 @@ export function PlannerSheet(props: Props) {
           onPanEnd={onPanEnd}
           aria-expanded={expanded}
           aria-label={expanded ? 'Kecilkan panel' : 'Besarkan panel'}
-          className="flex w-full shrink-0 touch-none justify-center pt-3 pb-2 focus-visible:outline-none [&:focus-visible>span]:bg-brand"
+          className="relative z-30 -mb-0.5 flex w-full shrink-0 touch-none justify-center rounded-t-3xl bg-white pt-3 pb-2.5 focus-visible:outline-none [&:focus-visible>span]:bg-brand"
         >
           <motion.span className="h-1.5 rounded-full bg-slate-200" initial={false} animate={{ width: expanded ? 28 : 40 }} />
         </motion.button>

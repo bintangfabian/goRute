@@ -122,8 +122,10 @@ export function RouteDetail(props: Props) {
   return (
     <section aria-labelledby={headingId} className="pb-2">
       {/* Stays at the top while the steps scroll, so the way back and the totals are always there. */}
-      {/* One pixel above the top, so Safari's rounding leaves no sliver of the rail showing over it. */}
-      <div className="sticky -top-px z-10 -mx-5 flex items-start gap-1 bg-white px-5 pt-2 pb-2 lg:pt-4">
+      {/* Its white reaches above it: iOS Safari sticks it a few pixels below the top of the
+          scrolling area, and the steps would show through that gap. Above the stop markers
+          (z-10) too, which scroll under it. */}
+      <div className="sticky top-0 z-20 -mx-5 flex items-start gap-1 bg-white px-5 pt-2 pb-2 before:pointer-events-none before:absolute before:inset-x-0 before:-top-4 before:h-4 before:bg-white lg:pt-4">
         <motion.button
           ref={back}
           type="button"
