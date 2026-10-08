@@ -140,7 +140,7 @@ export function PlannerSheet(props: Props) {
       transition={{ type: 'spring', stiffness: 260, damping: 30, delay: 0.2 }}
       // Expanded, the sheet is tall whatever its content, so the fields sit high and the
       // suggestions under them stay above the on-screen keyboard.
-      className={`absolute inset-x-0 bottom-0 z-10 mx-auto flex max-w-lg flex-col rounded-t-3xl bg-white shadow-[0_-8px_30px_rgb(0,0,0,0.12)] transition-[max-height,min-height] duration-300 ease-out ${
+      className={`absolute inset-x-0 bottom-0 z-10 mx-auto flex max-w-lg flex-col rounded-t-3xl bg-white shadow-[0_-8px_30px_rgb(0,0,0,0.12)] transition-[max-height,min-height] duration-300 ease-out motion-reduce:transition-none ${
         expanded ? 'max-h-[88dvh] min-h-[88dvh]' : withButton ? 'max-h-[70dvh] min-h-0' : 'max-h-[62dvh] min-h-0'
       } lg:inset-y-4 lg:right-auto lg:left-4 lg:mx-0 lg:max-h-none lg:min-h-0 lg:w-[420px] lg:max-w-none lg:rounded-3xl lg:shadow-[0_12px_40px_rgb(0,0,0,0.14)]`}
     >

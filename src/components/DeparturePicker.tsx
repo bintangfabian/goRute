@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import type { ReactNode } from 'react'
 import { addDays, daysBetween, wibClock, wibDay, wibTime } from '../../shared/time.ts'
+import { useExpand } from '../hooks/useExpand'
 import { useMinute } from '../hooks/useMinute'
 import { formatDay } from '../lib/format'
 import { DEPARTURE_DAYS, type PickedTime } from '../lib/trip'
@@ -67,6 +68,7 @@ type PanelProps = {
 
 /** Sekarang, Hari ini, Besok and the phone's own time input, under the tabs row. */
 export function DeparturePanel({ id, open, value, onChange, onClose }: PanelProps) {
+  const expand = useExpand()
   const minute = useMinute()
   const today = wibDay(minute)
   const offered = DEPARTURE_DAYS.map((day) => ({ ...day, ymd: addDays(today, day.offset).ymd }))
@@ -79,7 +81,7 @@ export function DeparturePanel({ id, open, value, onChange, onClose }: PanelProp
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
+          transition={expand}
           className="overflow-hidden"
         >
           <div role="group" aria-label="Waktu berangkat" className="flex flex-wrap items-center gap-2 pt-2">

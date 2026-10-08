@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { fareText, serviceName, stepText } from '../../shared/directions.ts'
+import { useExpand } from '../hooks/useExpand'
 import { useMinute } from '../hooks/useMinute'
 import type { Itinerary, Leg, WalkStep } from '../lib/api/client'
 import { formatClock, formatDistance, formatDuration, formatRupiah } from '../lib/format'
@@ -278,6 +279,7 @@ function WalkRow(props: { leg: Leg; target: string; toHalte: boolean; focused: b
   const [open, setOpen] = useState(false)
   const listId = useId()
   const steps = leg.distanceM >= SHORT_WALK_M ? (leg.steps ?? []) : []
+  const expand = useExpand()
   // The longest named streets say which way the walk goes before anyone opens the steps.
   const via = [...new Map(steps.filter((s) => s.name).map((s) => [s.name, s])).values()]
     .sort((a, b) => b.distanceM - a.distanceM)
@@ -308,7 +310,7 @@ function WalkRow(props: { leg: Leg; target: string; toHalte: boolean; focused: b
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
+                transition={expand}
                 className="overflow-hidden"
               >
                 {steps.map((step, i) => (
@@ -362,6 +364,7 @@ function RideRow({ leg, focused, onFocus }: { leg: Leg; focused: boolean; onFocu
   const Icon = leg.mode === 'BUS' ? BusIcon : TrainIcon
   const passed = leg.stops ?? []
   const fare = fareText(leg)
+  const expand = useExpand()
   return (
     <Row rail={<RailLine rail={{ kind: 'ride', color: background }} />} leg>
       <LegHeader focused={focused} onFocus={onFocus}>
@@ -400,7 +403,7 @@ function RideRow({ leg, focused, onFocus }: { leg: Leg; focused: boolean; onFocu
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
+                transition={expand}
                 className="overflow-hidden"
               >
                 {passed.map((stop, i) => (

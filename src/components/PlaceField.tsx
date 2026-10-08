@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useExpand } from '../hooks/useExpand'
 import { usePlaceSearch } from '../hooks/usePlaceSearch'
 import type { PlaceResult } from '../lib/api/client'
 import { inServiceArea, type Endpoint } from '../lib/trip'
@@ -48,6 +49,7 @@ export function PlaceField({ value, onChange, placeholder, kind, onEditing, near
   const [locating, setLocating] = useState(false)
   const [geoError, setGeoError] = useState<string | null>(null)
   const search = usePlaceSearch(focused ? query : '', near)
+  const expand = useExpand()
 
   const label = kind === 'origin' ? 'Asal' : 'Tujuan'
   const offerLocation = kind === 'origin'
@@ -206,7 +208,7 @@ export function PlaceField({ value, onChange, placeholder, kind, onEditing, near
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
+            transition={expand}
             className="overflow-hidden"
           >
             <div className="max-h-[min(26rem,55dvh)] overflow-y-auto overscroll-contain">
