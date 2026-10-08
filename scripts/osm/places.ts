@@ -91,6 +91,8 @@ const NICKNAMES: [nickname: string, name: RegExp, city?: string][] = [
   // The avenue in Jakarta Pusat: Bekasi and Tangerang have a Jalan MH Thamrin too, nearer from Bogor.
   ['Jalan MH Thamrin', /^jalan mohammad husni thamrin$/, 'Jakarta Pusat'],
   ['MH Thamrin', /^jalan mohammad husni thamrin$/, 'Jakarta Pusat'],
+  ['McD', /^mcdonald s\b/],
+  ['Mekdi', /^mcdonald s\b/],
   ['Jalan Sabang', /^jalan haji agus salim$/, 'Jakarta Pusat'],
   ['Kokas', /^kota kasablanka$/],
   ['KPK', /^komisi pemberantasan korupsi$/],

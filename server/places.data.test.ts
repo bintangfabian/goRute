@@ -69,3 +69,16 @@ test('short names go to the place riders mean, wherever they ask from', () => {
     for (const near of from) assert.match(places.search(q, near)[0].name, want, `${q} from ${JSON.stringify(near)}`)
   }
 })
+
+test('finds a branch near the place a query names after it', () => {
+  const places = loadPlaces()!
+  const within = (q: string, name: RegExp, lat: number, lon: number, meters: number) => {
+    const [top] = places.search(q, MONAS)
+    assert.match(top?.name ?? '', name, q)
+    const m = Math.hypot((top.lon - lon) * 111_320 * Math.cos((lat * Math.PI) / 180), (top.lat - lat) * 111_320)
+    assert.ok(m < meters, `${q}: ${Math.round(m)} m away`)
+  }
+  within('kfc blok m', /^KFC/, -6.2443, 106.8, 1000)
+  within('mcd sarinah', /^McDonald's/, -6.18763, 106.82366, 300)
+  within('starbucks kemang', /^Starbucks/, -6.2619, 106.8158, 1000)
+})

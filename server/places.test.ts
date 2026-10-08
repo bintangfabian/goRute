@@ -142,3 +142,22 @@ test('puts the place a nickname names first, however near other matches are', ()
   // Only typed whole: half of it is still everything that starts so.
   assert.equal(near.search('timu', BEKASI)[0].name, 'Bekasi Timur')
 })
+
+test('finds a place of one name near a place of another, when no name holds both', () => {
+  const blokM = index([
+    { name: 'Blok M', label: 'Lingkungan', weight: 1, lat: -6.2443, lon: 106.8 },
+    { name: 'Jalan Kemang Raya', label: 'Jalan', weight: 2.5, lat: -6.2619, lon: 106.8158 },
+    { name: 'KFC', label: 'Tempat makan', weight: 1, lat: -6.2448, lon: 106.8012 },
+    { name: 'KFC', label: 'Tempat makan', weight: 1, lat: -6.2475, lon: 106.803 },
+    { name: 'KFC', label: 'Tempat makan', weight: 1, lat: -6.17, lon: 106.82 },
+    { name: 'Starbucks', label: 'Kafe', weight: 1, lat: -6.2615, lon: 106.8162 },
+    { name: 'Starbucks', label: 'Kafe', weight: 1, lat: -6.19, lon: 106.82 },
+  ])
+  const near = (q: string) => blokM.search(q, JAKARTA).map((p) => `${p.name} ${p.lat}`)
+  // The nearest to Blok M first; the one across town not at all.
+  assert.deepEqual(near('kfc blok m'), ['KFC -6.2448', 'KFC -6.2475'])
+  assert.deepEqual(near('kfc dekat blok m'), ['KFC -6.2448', 'KFC -6.2475'])
+  // A street names the area as well.
+  assert.deepEqual(near('starbucks kemang'), ['Starbucks -6.2615'])
+  assert.deepEqual(near('kfc kemang'), [])
+})

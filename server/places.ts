@@ -28,6 +28,19 @@ const TYPO_PENALTY = 1.5
 const FEW = 3
 /** A word this many names use is no typo. */
 const COMMON_WORD = 50
+/**
+ * "kfc blok m": a place of one name near a place of another, when nothing is named both.
+ * Found this close to the second place, and coming after places matching the whole query.
+ */
+const NEAR_M = 800
+const NEAR_PENALTY = 1
+/** Words that only join what and where: "kfc dekat blok m", "atm di sarinah". */
+const NEAR_WORDS = new Set(['di', 'dekat', 'deket', 'sekitar', 'depan', 'samping', 'seberang', 'belakang', 'dalam'])
+/** What places are called by in "x near y": areas, streets, and places that stand out (malls, stations, campuses). */
+const LANDMARK_WEIGHT = 2.5
+const AREA_LABELS = new Set(['Kota', 'Kawasan', 'Kelurahan', 'Lingkungan', 'Perumahan', 'Jalan'])
+/** Places nearer than this to a landmark are listed, at most. */
+const MAX_LANDMARKS = 40
 /** Other words riders use for a kind of place. */
 const KIND_WORDS: Record<string, string[]> = {
   Bandara: ['airport', 'bandar', 'udara'],
@@ -147,6 +160,7 @@ export class PlaceIndex {
     const scores = new Map<number, number>()
     this.match(variants, short, 0, scores)
     if (scores.size < FEW && !short) this.match(this.corrected(spelled), false, TYPO_PENALTY, scores)
+    if (scores.size < FEW && !short && spelled.length > 1) this.matchNear(spelled, scores)
 
     // How well the name matches, weighed against how much the place usually matters
     // and how near it is: "jalan sudirman" means the avenue in Jakarta, even though
@@ -208,6 +222,49 @@ export class PlaceIndex {
       if (q.some((w) => this.kindWords[f.kind[i]].has(w))) score -= KIND_BONUS
       score += extra
       if (score < (scores.get(i) ?? Infinity)) scores.set(i, score)
+    }
+  }
+
+  /**
+   * Places named by the start of the query near a place named by the rest, when no
+   * name holds both: "kfc blok m" is the KFC 300 m from Blok M, "starbucks kemang"
+   * one on Jalan Kemang Raya. Linking words go ("kfc dekat blok m"). The nearer to
+   * the landmark, the better, and all after places matching the whole query.
+   */
+  private matchNear(q: string[], scores: Map<number, number>) {
+    const f = this.file
+    for (let split = q.length - 1; split >= 1; split--) {
+      const what = q.slice(0, split)
+      const where = q.slice(split)
+      while (where.length > 1 && NEAR_WORDS.has(where[0])) where.shift()
+      while (what.length > 1 && NEAR_WORDS.has(what[what.length - 1])) what.pop()
+      if (what.join('').length < 2 || where.join('').length < 2) continue
+      const whatTyped = typedWords(what)
+      const whereTyped = typedWords(where)
+      const landmarks: { i: number; rank: number }[] = []
+      for (let i = 0; i < this.forms.length; i++) {
+        const label = f.labels[f.kind[i]]
+        if (!AREA_LABELS.has(label) && f.weight[i] < LANDMARK_WEIGHT) continue
+        const score = this.nameMatch(i, whereTyped)
+        // Streets are named "Jalan X": "kemang" in Jalan Kemang Raya counts as well as a name starting so.
+        if (score <= (label === 'Jalan' ? 1.5 : 1)) landmarks.push({ i, rank: score - f.weight[i] })
+      }
+      if (landmarks.length === 0) continue
+      landmarks.sort((a, b) => a.rank - b.rank)
+      const anchors = landmarks.slice(0, MAX_LANDMARKS).map(({ i }) => i)
+      let found = 0
+      for (let i = 0; i < this.forms.length; i++) {
+        if (AREA_LABELS.has(f.labels[f.kind[i]])) continue
+        const score = this.nameMatch(i, whatTyped)
+        if (score > 1) continue
+        let nearest = Infinity
+        for (const a of anchors) if (a !== i) nearest = Math.min(nearest, km(f.lat[a], f.lon[a], f.lat[i], f.lon[i]) * 1000)
+        if (nearest > NEAR_M) continue
+        const near = score + NEAR_PENALTY + nearest / NEAR_M
+        if (near < (scores.get(i) ?? Infinity)) scores.set(i, near)
+        found++
+      }
+      if (found > 0) return
     }
   }
 
