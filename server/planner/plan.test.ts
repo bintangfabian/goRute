@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import type { Itinerary, Plan } from '../../shared/api.ts'
 import { STOPS, testTimetable } from '../testing/network.ts'
+import { testWalkFile } from '../testing/walk.ts'
+import { WalkNetwork } from '../walk/network.ts'
+import { Walking } from '../walk/walking.ts'
 import { planTrip, premiumRoutes } from './plan.ts'
 
 const tt = testTimetable()
@@ -107,6 +110,54 @@ describe('planTrip', () => {
     })
     assert.equal(back.reason, 'far-from-destination')
     assert.equal(plan('A', 'F', '2026-10-06T08:00:00+07:00').reason, undefined)
+  })
+
+  test('walks along streets to and from the haltes, with directions', () => {
+    // One street through every halte, and a side street from the south meeting it at B.
+    const walking = new Walking(
+      new WalkNetwork(
+        testWalkFile([
+          { name: 'Jalan Lurus', points: [[-6.2, 106.795], [-6.2, 106.81], [-6.2, 106.845]] },
+          { name: 'Jalan Samping', kind: 'alley', points: [[-6.204, 106.81], [-6.2, 106.81]] },
+        ]),
+      ),
+      tt,
+    )
+    const p = planTrip(
+      tt,
+      { from: { name: 'Rumah', lat: -6.204, lon: 106.81 }, to: { name: 'Tujuan', ...STOPS.F }, departure: new Date('2026-10-06T08:00:00+07:00') },
+      walking,
+    )
+    const it = byId(p, p.ranking.termurah[0])
+    assert.deepEqual(routes(it), ['1', '2'])
+    const [walkIn, ride] = it.legs
+    assert.equal(walkIn.mode, 'WALK')
+    assert.equal(walkIn.to.name, 'Halte B')
+    // Up the side street to the corner, then along the street: never across the block.
+    assert.deepEqual(walkIn.geometry[0], [106.81, -6.204])
+    assert.ok(walkIn.geometry.some(([lon, lat]) => lon === 106.81 && lat === -6.2), JSON.stringify(walkIn.geometry))
+    assert.deepEqual(
+      walkIn.steps?.map((s) => [s.maneuver, s.name]),
+      [['depart', 'Jalan Samping']],
+    )
+    assert.equal(walkIn.steps?.[0].bearing, 0)
+    assert.ok(Math.abs(walkIn.distanceM - 445) < 5, `walk ${walkIn.distanceM} m`)
+
+    // Headed for the far end of its trip, whatever GTFS calls the trip.
+    assert.equal(ride.headsign, 'Halte D')
+    assert.deepEqual(
+      ride.stops?.map((s) => s.name),
+      ['Halte C'],
+    )
+
+    // A walk-only trip follows the street too.
+    const short = planTrip(
+      tt,
+      { from: { name: 'Asal', lat: -6.2, lon: 106.8295 }, to: { name: 'Tujuan', lat: -6.2, lon: 106.8305 }, departure: new Date('2026-10-06T08:00:00+07:00') },
+      walking,
+    )
+    const walk = short.itineraries.find((i) => i.legs.length === 1)!
+    assert.equal(walk.legs[0].steps?.[0].name, 'Jalan Lurus')
   })
 
   test('walks further, or says so, when the buses nearby are off that day', () => {

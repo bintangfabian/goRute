@@ -2,11 +2,9 @@ import { useEffect, useState } from 'react'
 import { api, type PlaceResult } from '../lib/api/client'
 
 const DEBOUNCE_MS = 250
-// The geocoder is slow and keeps a function waiting for seconds, so it is
-// only asked once typing pauses, for queries long enough to mean something.
-const PLACES_DEBOUNCE_MS = 700
-const PLACES_MIN_LENGTH = 3
 const MAX_SHOWN = 6
+/** A place this close to a halte of the same name is that halte ("Monas 1"), already listed with its routes. */
+const SAME_HALTE_DEG = 0.0015
 
 export type PlaceSearch = {
   places: PlaceResult[]
@@ -14,14 +12,15 @@ export type PlaceSearch = {
   error: string | null
 }
 
-// Haltes come from our own timetable and answer at once. Places from the
-// geocoder can take seconds or fail, so they join the list when they arrive.
+// Haltes and places come from two endpoints; each joins the list when it arrives.
 type Answers = { q: string; stops: PlaceResult[] | null; places: PlaceResult[] | null; error: string | null }
 
-export function usePlaceSearch(query: string): PlaceSearch {
+/** `near` is the other end of the trip, if chosen: places near it come first. */
+export function usePlaceSearch(query: string, near: { lat: number; lon: number } | null = null): PlaceSearch {
   const q = query.trim()
   const active = q.length >= 2
-  const asksGeocoder = q.length >= PLACES_MIN_LENGTH
+  // A string, so a new object for the same spot does not search again.
+  const nearKey = near ? `${near.lat.toFixed(2)},${near.lon.toFixed(2)}` : null
   // Results stay visible while the next query loads, so the list does not flicker.
   const [answers, setAnswers] = useState<Answers>({ q: '', stops: [], places: [], error: null })
 
@@ -39,36 +38,43 @@ export function usePlaceSearch(query: string): PlaceSearch {
         })
     }, DEBOUNCE_MS)
     const placesTimer = setTimeout(() => {
-      if (q.length < PLACES_MIN_LENGTH) return
       api
-        .places(q, controller.signal)
+        .places(q, nearKey ? { lat: Number(nearKey.split(',')[0]), lon: Number(nearKey.split(',')[1]) } : null, controller.signal)
         .then(({ data, error }) => settle({ places: data?.places ?? [], error: error ?? null }))
         .catch(() => {
           if (!controller.signal.aborted) settle({ places: [], error: 'Server tidak bisa dihubungi.' })
         })
-    }, PLACES_DEBOUNCE_MS)
+    }, DEBOUNCE_MS)
     return () => {
       clearTimeout(stopsTimer)
       clearTimeout(placesTimer)
       controller.abort()
     }
-  }, [q, active])
+  }, [q, active, nearKey])
 
   if (!active) return { places: [], loading: false, error: null }
   // Older results only stand in while the rider keeps typing the same word ("mon" → "monas");
   // after a different query they would be suggestions for something else.
   const usable = answers.q === q || q.toLowerCase().startsWith(answers.q.toLowerCase())
-  const geocoded = asksGeocoder && usable ? (answers.places ?? []) : []
-  const places = usable ? merge(answers.stops ?? [], geocoded).slice(0, MAX_SHOWN) : []
-  const loading = answers.q !== q || answers.stops === null || (asksGeocoder && answers.places === null)
-  // A failed geocoder only matters when the haltes found nothing either.
-  return { places, loading, error: !loading && places.length === 0 && asksGeocoder ? answers.error : null }
+  const places = usable ? merge(answers.stops ?? [], answers.places ?? []).slice(0, MAX_SHOWN) : []
+  const loading = answers.q !== q || answers.stops === null || answers.places === null
+  // A failed place search only matters when the haltes found nothing either.
+  return { places, loading, error: !loading && places.length === 0 ? answers.error : null }
 }
 
-/** Haltes first, then geocoder places that are not the same halte again (same name, within ~1 km). */
+/**
+ * Haltes first, then places that are not the same halte again (same name, right
+ * there). The monument Monas and the station Tanah Abang stay: they are not
+ * the haltes named after them.
+ */
 function merge(stops: PlaceResult[], places: PlaceResult[]): PlaceResult[] {
   // Only a platform digit is dropped: "Monas 1" is the halte Monas, "SMAN 73" is not SMAN 85.
-  const base = (p: PlaceResult) => p.name.toLowerCase().replace(/\s+[1-9]$/, '')
-  const near = (a: PlaceResult, b: PlaceResult) => Math.abs(a.lat - b.lat) < 0.01 && Math.abs(a.lon - b.lon) < 0.01
+  // The geocoder calls a halte "Halte Monas".
+  const base = (p: PlaceResult) =>
+    p.name
+      .toLowerCase()
+      .replace(/^halte\s+/, '')
+      .replace(/\s+[1-9]$/, '')
+  const near = (a: PlaceResult, b: PlaceResult) => Math.abs(a.lat - b.lat) < SAME_HALTE_DEG && Math.abs(a.lon - b.lon) < SAME_HALTE_DEG
   return [...stops, ...places.filter((p) => !stops.some((s) => base(s) === base(p) && near(s, p)))]
 }

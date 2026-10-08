@@ -1,8 +1,24 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { usePlaceSearch } from '../hooks/usePlaceSearch'
+import type { PlaceResult } from '../lib/api/client'
 import { inServiceArea, type Endpoint } from '../lib/trip'
-import { BusIcon, CloseIcon, LocateIcon, PinIcon } from './icons'
+import {
+  BagIcon,
+  BuildingIcon,
+  BusIcon,
+  CloseIcon,
+  FoodIcon,
+  HomeIcon,
+  HospitalIcon,
+  LandmarkIcon,
+  LocateIcon,
+  PinIcon,
+  RoadIcon,
+  SchoolIcon,
+  TrainIcon,
+  WorshipIcon,
+} from './icons'
 
 type Props = {
   value: Endpoint | null
@@ -11,6 +27,8 @@ type Props = {
   kind: 'origin' | 'destination'
   /** Told when the rider starts and stops typing here. */
   onEditing?: (editing: boolean) => void
+  /** The other end of the trip, if chosen: places near it are suggested first. */
+  near?: Endpoint | null
 }
 
 // `place` is empty for the GPS option.
@@ -18,17 +36,18 @@ type Option = { id: string; icon: ReactNode; title: string; subtitle: string; pl
 
 // A combobox: type to search, arrow keys move through the suggestions, Enter
 // takes the highlighted one (or the first place), Escape closes the list.
-export function PlaceField({ value, onChange, placeholder, kind, onEditing }: Props) {
+export function PlaceField({ value, onChange, placeholder, kind, onEditing, near = null }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
   // Escape hides the list until the rider types again.
   const [dismissed, setDismissed] = useState(false)
-  const [active, setActive] = useState(-1)
+  // The highlighted suggestion, by id: new answers move it with its place, not its position.
+  const [activeId, setActiveId] = useState<string | null>(null)
   const [locating, setLocating] = useState(false)
   const [geoError, setGeoError] = useState<string | null>(null)
-  const search = usePlaceSearch(focused ? query : '')
+  const search = usePlaceSearch(focused ? query : '', near)
 
   const label = kind === 'origin' ? 'Asal' : 'Tujuan'
   const offerLocation = kind === 'origin'
@@ -38,7 +57,7 @@ export function PlaceField({ value, onChange, placeholder, kind, onEditing }: Pr
   function choose(endpoint: Endpoint) {
     onChange(endpoint)
     setQuery('')
-    setActive(-1)
+    setActiveId(null)
     inputRef.current?.blur()
   }
 
@@ -79,7 +98,7 @@ export function PlaceField({ value, onChange, placeholder, kind, onEditing }: Pr
       : []),
     ...(hasQuery ? search.places : []).map((p) => ({
       id: p.id,
-      icon: p.kind === 'stop' ? <BusIcon className="size-4 text-brand" /> : <PinIcon className="size-4 text-slate-400" />,
+      icon: <PlaceIcon place={p} />,
       title: p.name,
       subtitle: p.address,
       place: { name: p.name, lat: p.lat, lon: p.lon },
@@ -90,9 +109,9 @@ export function PlaceField({ value, onChange, placeholder, kind, onEditing }: Pr
     else locateMe()
   }
 
-  // Results can shrink under the highlight while they load.
-  const current = active < options.length ? active : -1
+  const current = activeId === null ? -1 : options.findIndex((o) => o.id === activeId)
   const optionId = (i: number) => `${listId}-${i}`
+  const setActive = (i: number) => setActiveId(i >= 0 ? (options[i]?.id ?? null) : null)
 
   // Keep the highlighted suggestion in view when arrow keys move past the scrolled part.
   useEffect(() => {
@@ -108,8 +127,14 @@ export function PlaceField({ value, onChange, placeholder, kind, onEditing }: Pr
       if (current === -1) setActive(e.key === 'ArrowDown' ? 0 : n - 1)
       else setActive((current + (e.key === 'ArrowDown' ? 1 : -1) + n) % n)
     } else if (e.key === 'Enter') {
+      if (!open) return
+      if (current < 0 && search.loading && hasQuery) {
+        // The list may still show places for what was typed before; the first of them is not what was asked for.
+        e.preventDefault()
+        return
+      }
       const chosen = current >= 0 ? options[current] : options.find((o) => o.place)
-      if (open && chosen) {
+      if (chosen) {
         e.preventDefault()
         pick(chosen)
       }
@@ -117,7 +142,7 @@ export function PlaceField({ value, onChange, placeholder, kind, onEditing }: Pr
       e.preventDefault()
       if (open) {
         setDismissed(true)
-        setActive(-1)
+        setActiveId(null)
       } else inputRef.current?.blur()
     }
   }
@@ -145,7 +170,7 @@ export function PlaceField({ value, onChange, placeholder, kind, onEditing }: Pr
           value={focused ? query : (value?.name ?? '')}
           onChange={(e) => {
             setQuery(e.target.value)
-            setActive(-1)
+            setActiveId(null)
             setDismissed(false)
           }}
           onKeyDown={onKeyDown}
@@ -230,4 +255,50 @@ export function PlaceField({ value, onChange, placeholder, kind, onEditing }: Pr
       </AnimatePresence>
     </div>
   )
+}
+
+const CATEGORY_ICONS: Record<string, (p: { className?: string }) => ReactNode> = {
+  Stasiun: TrainIcon,
+  Bandara: TrainIcon,
+  'Terminal bus': BusIcon,
+  Mal: BagIcon,
+  Supermarket: BagIcon,
+  Minimarket: BagIcon,
+  Toko: BagIcon,
+  Pasar: BagIcon,
+  'Rumah sakit': HospitalIcon,
+  Klinik: HospitalIcon,
+  Kampus: SchoolIcon,
+  Sekolah: SchoolIcon,
+  Masjid: WorshipIcon,
+  Gereja: WorshipIcon,
+  Vihara: WorshipIcon,
+  Pura: WorshipIcon,
+  Klenteng: WorshipIcon,
+  'Tempat ibadah': WorshipIcon,
+  Jalan: RoadIcon,
+  Perumahan: HomeIcon,
+  Kelurahan: HomeIcon,
+  Kawasan: HomeIcon,
+  Lingkungan: HomeIcon,
+  Kota: HomeIcon,
+  'Tempat makan': FoodIcon,
+  Kafe: FoodIcon,
+  'Tempat bersejarah': LandmarkIcon,
+  'Tempat wisata': LandmarkIcon,
+  Museum: LandmarkIcon,
+  Stadion: LandmarkIcon,
+  'Kantor pemerintahan': BuildingIcon,
+  Kantor: BuildingIcon,
+  Gedung: BuildingIcon,
+  Apartemen: BuildingIcon,
+  Hotel: BuildingIcon,
+  Bank: BuildingIcon,
+}
+
+/** A halte in the brand colour; a place by what it is, so a list of names reads at a glance. */
+function PlaceIcon({ place }: { place: PlaceResult }) {
+  if (place.kind === 'stop') return <BusIcon className="size-4 text-brand" />
+  const Icon = (place.category && CATEGORY_ICONS[place.category]) || PinIcon
+  return <Icon className="size-4 text-slate-500" />
 }

@@ -50,8 +50,41 @@ export type Leg = {
   route: Route | null
   /** Paid when boarding this leg: 0 when an earlier ticket covers it, null for walking or unknown fares. */
   fareIdr: number | null
-  /** [lon, lat] pairs. */
+  /** Rides: true when fareIdr is 0 because a ticket bought earlier on the trip still covers this ride. */
+  fareCovered?: boolean
+  /** [lon, lat] pairs; a walk follows the streets when the server has the path network. */
   geometry: [number, number][]
+  /** Rides: where the bus is headed, the last halte of its trip (may be empty). */
+  headsign?: string
+  /** Rides: the stops passed between boarding and alighting, in order. */
+  stops?: Place[]
+  /** Walks along the path network: turn-by-turn directions. */
+  steps?: WalkStep[]
+}
+
+/** What a stretch of walk is on, so directions can say "Menyeberang" or "Naik jembatan penyeberangan". */
+export type WalkWay =
+  | 'road'
+  | 'footway'
+  | 'crossing'
+  | 'footbridge'
+  | 'underpass'
+  | 'steps'
+  | 'path'
+  | 'alley'
+  | 'pedestrian'
+  | 'platform'
+  | 'bridge'
+
+export type WalkStep = {
+  /** How the step starts: depart for the first, otherwise the turn from the previous one. */
+  maneuver: 'depart' | 'straight' | 'slight-left' | 'left' | 'sharp-left' | 'slight-right' | 'right' | 'sharp-right' | 'uturn'
+  /** Street or path name; empty for an unnamed way. */
+  name: string
+  way: WalkWay
+  distanceM: number
+  /** Compass heading where the step starts, degrees clockwise from north. */
+  bearing: number
 }
 
 export type Place = { name: string; lat: number; lon: number }
@@ -70,9 +103,11 @@ export type Route = {
 
 export type PlaceResult = Place & {
   id: string
-  /** A halte from the timetable, or a place from the geocoder. */
+  /** A halte from the timetable, or a place from the place index or the geocoder. */
   kind: 'stop' | 'place'
   address: string
+  /** What a place from the index is: "Stasiun", "Mal", "Jalan", ... */
+  category?: string
 }
 
 export type ApiError = { error: string }

@@ -8,7 +8,7 @@ import { PlannerSheet } from './components/PlannerSheet'
 import { Toast, type ToastMessage } from './components/Toast'
 import { usePlan } from './hooks/usePlan'
 import { useServiceStatus } from './hooks/useServiceStatus'
-import type { Plan } from './lib/api/client'
+import type { Itinerary, Plan } from './lib/api/client'
 import type { Endpoint, PickedTime, Preference } from './lib/trip'
 
 // Ends closer than this are the same spot: there is nothing to plan between them.
@@ -25,6 +25,11 @@ export default function App() {
   const [chosen, setChosen] = useState<{ plan: Plan; id: string } | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [toast, setToast] = useState<ToastMessage | null>(null)
+  // The leg the map is zoomed to in an option's details; it only counts for the option it was tapped in.
+  const [focus, setFocus] = useState<{ leg: number; of: Itinerary } | null>(null)
+  const onFocusLeg = useCallback((leg: number | null, of: Itinerary | null) => setFocus(leg === null || !of ? null : { leg, of }), [])
+  // An option's details make the sheet taller or shorter than the list: the camera fits the route again.
+  const [detailOpen, setDetailOpen] = useState(false)
   const sheetRef = useRef<HTMLElement>(null)
 
   const samePlace =
@@ -38,6 +43,7 @@ export default function App() {
   const selectedId = ready ? (chosen?.plan === ready ? chosen.id : (ready.ranking[preference][0] ?? null)) : null
   const selected = ready?.itineraries.find((it) => it.id === selectedId) ?? null
   const message = samePlace || plan.kind === 'error' || ready?.itineraries.length === 0
+  const focusLeg = focus && focus.of === selected ? focus.leg : null
   const clearToast = useCallback(() => setToast(null), [])
 
   return (
@@ -47,9 +53,17 @@ export default function App() {
         onPick={(point) => (destination && !origin ? setOrigin(point) : setDestination(point))}
         onOutside={() => setToast({ id: Date.now(), text: 'Titik itu di luar area layanan Jabodetabek.' })}
       >
-        {selected && <RouteLine itinerary={selected} />}
+        {selected && <RouteLine itinerary={selected} focus={focusLeg} />}
         <EndpointMarkers origin={origin} destination={destination} />
-        <CameraFollow origin={origin} destination={destination} itinerary={selected} sheet={sheetRef} message={message} />
+        <CameraFollow
+          origin={origin}
+          destination={destination}
+          itinerary={selected}
+          focus={selected && focusLeg !== null ? selected.legs[focusLeg] : null}
+          sheet={sheetRef}
+          message={message}
+          detail={detailOpen}
+        />
       </MapView>
       <BrandBar
         state={status}
@@ -75,6 +89,9 @@ export default function App() {
         onRetry={() => setAttempt((n) => n + 1)}
         selectedId={selectedId}
         onSelect={(id) => ready && setChosen({ plan: ready, id })}
+        focusLeg={focusLeg}
+        onFocusLeg={onFocusLeg}
+        onDetailChange={setDetailOpen}
       />
     </main>
   )

@@ -2,11 +2,15 @@
 
 import type { Itinerary, Leg, Place, Plan } from '../../shared/api.ts'
 import { quoteFares } from '../fare.ts'
-import { lineLengthM, type LonLat } from '../geo.ts'
-import { raptor, type Journey, type ServiceDay, type StopWalk } from '../router/raptor.ts'
+import { distanceM, lineLengthM, type LonLat } from '../geo.ts'
+import { raptor, type Journey, type ServiceDay, type StopWalk, type WalkLeg } from '../router/raptor.ts'
+import { placeName } from '../stops.ts'
 import { addDays, wibDay, type WibDay } from '../../shared/time.ts'
 import type { Pattern, Timetable } from '../timetable/timetable.ts'
-import { walkMeters, walkSeconds } from '../walk.ts'
+import { walkMeters, walkSeconds } from '../walk/estimate.ts'
+import type { Reach, Stretch } from '../walk/network.ts'
+import { walkSteps } from '../walk/steps.ts'
+import { SLOT, type Walking } from '../walk/walking.ts'
 import { keepDistinct, rank } from './rank.ts'
 
 export type PlanRequest = { from: Place; to: Place; departure: Date }
@@ -42,7 +46,16 @@ const SLOWDOWN_SLACK_SEC = 15 * 60
  */
 const RUPIAH_PER_MINUTE = 250
 
-export function planTrip(tt: Timetable, req: PlanRequest): Plan {
+/**
+ * Plans a trip. With `walking`, walks follow the path network (and get
+ * turn-by-turn steps); without it they are straight-line estimates.
+ */
+export function planTrip(tt: Timetable, req: PlanRequest, walking: Walking | null = null): Plan {
+  const ends: Ends = {
+    walking,
+    from: { place: req.from, reach: walking?.reach(req.from.lat, req.from.lon, FAR_WALK_M, SLOT.from) ?? null },
+    to: { place: req.to, reach: walking?.reach(req.to.lat, req.to.lon, FAR_WALK_M, SLOT.to) ?? null },
+  }
   const day = wibDay(req.departure.getTime())
   const departure = Math.floor((req.departure.getTime() - day.midnightMs) / 1000)
   // Yesterday's late trips and tomorrow's early ones are in reach around midnight.
@@ -56,8 +69,8 @@ export function planTrip(tt: Timetable, req: PlanRequest): Plan {
     raptor(tt, {
       departure,
       days,
-      access: nearby(tt, req.from, s, today),
-      egress: nearby(tt, req.to, s, today),
+      access: nearby(tt, ends, ends.from, s, today),
+      egress: nearby(tt, ends, ends.to, s, today),
       maxRides: s.maxRides,
       maxTransferM: s.maxTransferM,
       bannedRoutes,
@@ -80,12 +93,12 @@ export function planTrip(tt: Timetable, req: PlanRequest): Plan {
     found.push(...search(DEFAULT_SEARCH, premium))
   }
 
-  const options = dedupe(found.map((j) => toOption(tt, j, req, day.midnightMs)))
-  const walk = walkOnly(req, departure, day.midnightMs)
+  const options = dedupe(found.map((j) => toOption(tt, j, req, day.midnightMs, ends)))
+  const walk = walkOnly(req, departure, day.midnightMs, ends)
   if (walk) options.push(walk)
 
   const trips = options.map((o) => o.itinerary)
-  if (trips.length === 0) return { itineraries: [], ranking: rank([]), ...whyEmpty(tt, req, day, today) }
+  if (trips.length === 0) return { itineraries: [], ranking: rank([]), ...whyEmpty(tt, ends, day, today) }
   const leaveMs = req.departure.getTime()
   const soonest = trips.reduce((a, b) => (Date.parse(b.end) < Date.parse(a.end) ? b : a))
   const fastestMs = Date.parse(soonest.end) - leaveMs
@@ -123,16 +136,16 @@ export function premiumRoutes(tt: Timetable): Set<number> {
  * among every stop within FAR_WALK_M: the default search walks that far
  * whenever the nearer ones are off.
  */
-function whyEmpty(tt: Timetable, req: PlanRequest, day: WibDay, today: Uint8Array): Pick<Plan, 'reason' | 'nextServiceDate'> {
-  const from = nearby(tt, req.from, DEFAULT_SEARCH, today)
-  const to = nearby(tt, req.to, DEFAULT_SEARCH, today)
+function whyEmpty(tt: Timetable, ends: Ends, day: WibDay, today: Uint8Array): Pick<Plan, 'reason' | 'nextServiceDate'> {
+  const from = nearby(tt, ends, ends.from, DEFAULT_SEARCH, today)
+  const to = nearby(tt, ends, ends.to, DEFAULT_SEARCH, today)
   if (from.length === 0) return { reason: 'far-from-origin' }
   if (to.length === 0) return { reason: 'far-from-destination' }
   const runs = (stops: StopWalk[], active: Uint8Array) => stops.some((s) => tt.runsAt(s.stop, active))
   const reason = !runs(from, today) ? 'no-service-near-origin' : !runs(to, today) ? 'no-service-near-destination' : null
   if (!reason) return { reason: 'no-trip' }
-  const fromFar = tt.stopsNear(req.from.lat, req.from.lon, FAR_WALK_M)
-  const toFar = tt.stopsNear(req.to.lat, req.to.lon, FAR_WALK_M)
+  const fromFar = stopsWithin(tt, ends, ends.from, FAR_WALK_M)
+  const toFar = stopsWithin(tt, ends, ends.to, FAR_WALK_M)
   for (let delta = 1; delta <= NEXT_SERVICE_DAYS; delta++) {
     const d = addDays(day, delta)
     const active = tt.activeServices(d.ymd, d.weekday)
@@ -143,11 +156,49 @@ function whyEmpty(tt: Timetable, req: PlanRequest, day: WibDay, today: Uint8Arra
   return { reason }
 }
 
-/** Stops within the search's walk of `p`. The default search walks further when none of them has a bus that day. */
-function nearby(tt: Timetable, p: Place, s: Search, today: Uint8Array): StopWalk[] {
-  const stops = tt.stopsNear(p.lat, p.lon, s.maxWalkM)
+/** The trip's ends and how they walk to the haltes. */
+type Ends = { walking: Walking | null; from: End; to: End }
+/** A trip end, with the walks along paths from it when it is near one. */
+type End = { place: Place; reach: Reach | null }
+
+/** Stops within a walk of an end: along paths when it has them, otherwise in a straight line plus a detour. */
+function stopsWithin(tt: Timetable, ends: Ends, end: End, maxWalkM: number): StopWalk[] {
+  if (ends.walking && end.reach) return ends.walking.stopsWithin(end.reach, maxWalkM)
+  return tt.stopsNear(end.place.lat, end.place.lon, maxWalkM)
+}
+
+/** Stops within the search's walk of an end. The default search walks further when none of them has a bus that day. */
+function nearby(tt: Timetable, ends: Ends, end: End, s: Search, today: Uint8Array): StopWalk[] {
+  const stops = stopsWithin(tt, ends, end, s.maxWalkM)
   if (s !== DEFAULT_SEARCH || stops.some((st) => tt.runsAt(st.stop, today))) return stops
-  return tt.stopsNear(p.lat, p.lon, FAR_WALK_M)
+  return stopsWithin(tt, ends, end, FAR_WALK_M)
+}
+
+/** A router walk along paths, from start to end of the leg; null when either end is off the paths. */
+function walkPath(ends: Ends, l: WalkLeg): Stretch[] | null {
+  const path = pathOf(ends, l)
+  // Nothing to draw (the two points are one): a straight line stands in.
+  return path && path.length > 0 ? path : null
+}
+
+function pathOf(ends: Ends, l: WalkLeg): Stretch[] | null {
+  const { walking } = ends
+  if (!walking) return null
+  if (l.kind === 'transfer') return walking.between(l.from, l.to)
+  if (l.kind === 'access') {
+    const stop = walking.stopSnap[l.to]
+    return stop && ends.from.reach ? ends.from.reach.pathTo(stop) : null
+  }
+  // The end's search started at the destination, so its walk to the stop runs backwards.
+  const stop = walking.stopSnap[l.from]
+  const back = stop && ends.to.reach ? ends.to.reach.pathTo(stop) : null
+  return back && reversed(back)
+}
+
+const reversed = (path: Stretch[]): Stretch[] => path.toReversed().map((p) => ({ ...p, from: p.to, to: p.from }))
+
+function pathGeometry(path: Stretch[]): LonLat[] {
+  return [path[0].from, ...path.map((p) => p.to)]
 }
 
 type Option = {
@@ -173,7 +224,7 @@ function dedupe(options: Option[]): Option[] {
   return [...bySignature.values()]
 }
 
-function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs: number): Option {
+function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs: number, ends: Ends): Option {
   const at = (sec: number) => new Date(midnightMs + sec * 1000).toISOString()
   const place = (stop: number, fallback: Place): Place =>
     stop < 0 ? fallback : { name: tt.stopName[stop], lat: tt.stopLat[stop], lon: tt.stopLon[stop] }
@@ -187,6 +238,8 @@ function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs:
   const legs: Leg[] = []
   const rides: { routeId: string; fare: number; boardMs: number; leg: Leg }[] = []
   const signature: string[] = []
+  /** Each walk leg's path, to redo its steps when the next walk joins it. */
+  const paths = new Map<Leg, Stretch[]>()
 
   for (const l of journey.legs) {
     if (l.kind === 'ride') {
@@ -217,6 +270,8 @@ function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs:
         },
         fareIdr: null,
         geometry,
+        headsign: headsign(tt, pat, l.board),
+        stops: Array.from({ length: Math.max(0, l.alight - l.board - 1) }, (_, k) => place(pat.stops[l.board + 1 + k], req.from)),
       }
       legs.push(leg)
       rides.push({ routeId: route.id, fare: route.fare, boardMs: midnightMs + dep * 1000, leg })
@@ -228,6 +283,7 @@ function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs:
     if (l.meters === 0) continue // origin or destination is right at the stop
     const from = place(l.from, req.from)
     const to = place(l.to, req.to)
+    const path = walkPath(ends, l)
     const prev = legs.at(-1)
     if (prev?.mode === 'WALK') {
       // A transfer walk followed by the walk to the destination reads as one walk.
@@ -235,9 +291,19 @@ function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs:
       prev.durationSec += l.sec
       prev.distanceM += l.meters
       prev.end = at(clock + l.sec)
-      prev.geometry.push([to.lon, to.lat])
+      const before = paths.get(prev)
+      if (before && path && ends.walking) {
+        const joined = [...before, ...path]
+        paths.set(prev, joined)
+        prev.geometry = pathGeometry(joined)
+        prev.steps = walkSteps(ends.walking.net, joined)
+      } else {
+        paths.delete(prev)
+        delete prev.steps
+        prev.geometry.push(...(path ? pathGeometry(path).slice(1) : [[to.lon, to.lat] as LonLat]))
+      }
     } else {
-      legs.push({
+      const leg: Leg = {
         mode: 'WALK',
         start: at(clock),
         end: at(clock + l.sec),
@@ -247,11 +313,18 @@ function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs:
         to,
         route: null,
         fareIdr: null,
-        geometry: [
-          [from.lon, from.lat],
-          [to.lon, to.lat],
-        ],
-      })
+        geometry: path
+          ? pathGeometry(path)
+          : [
+              [from.lon, from.lat],
+              [to.lon, to.lat],
+            ],
+      }
+      if (path && ends.walking) {
+        leg.steps = walkSteps(ends.walking.net, path)
+        paths.set(leg, path)
+      }
+      legs.push(leg)
     }
     clock += l.sec
   }
@@ -259,7 +332,10 @@ function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs:
   const quote = quoteFares(
     rides.map((r) => ({ routeId: r.routeId, product: tt.fares[r.fare], boardMs: r.boardMs })),
   )
-  rides.forEach((r, i) => (r.leg.fareIdr = quote.charges[i]))
+  rides.forEach((r, i) => {
+    r.leg.fareIdr = quote.charges[i]
+    if (quote.covered[i]) r.leg.fareCovered = true
+  })
 
   const startMs = Date.parse(legs[0].start)
   const endMs = Date.parse(legs.at(-1)!.end)
@@ -277,6 +353,28 @@ function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs:
   }
 }
 
+/**
+ * Where a bus is headed, as its sign would say. TransJakarta's GTFS headsigns name both
+ * ends of the route ("Pancoran dan Puri Beta") whichever way the bus goes, and most trips
+ * run there and back: out to the halte farthest from where they start, then home again.
+ * Before that halte the bus is headed for it; after it, for the end of the trip.
+ */
+function headsign(tt: Timetable, pat: Pattern, board: number): string {
+  const { stops } = pat
+  const first = stops[0]
+  let turn = 0
+  let turnM = -1
+  for (let k = 0; k < stops.length; k++) {
+    const m = distanceM(tt.stopLat[first], tt.stopLon[first], tt.stopLat[stops[k]], tt.stopLon[stops[k]])
+    if (m > turnM) {
+      turnM = m
+      turn = k
+    }
+  }
+  const to = placeName(tt.stopName[board < turn ? stops[turn] : stops[stops.length - 1]])
+  return to !== placeName(tt.stopName[stops[board]]) ? to : pat.headsign
+}
+
 /** The pattern's shape between two stops, or straight lines through its stops without one. */
 function rideGeometry(tt: Timetable, pat: Pattern, board: number, alight: number): LonLat[] {
   const stop = (pos: number): LonLat => [tt.stopLon[pat.stops[pos]], tt.stopLat[pat.stops[pos]]]
@@ -290,9 +388,16 @@ function rideGeometry(tt: Timetable, pat: Pattern, board: number, alight: number
   return [stop(board), ...tt.shape(pat.shape).slice(a, b + 1), stop(alight)]
 }
 
-function walkOnly(req: PlanRequest, departure: number, midnightMs: number): Option | null {
-  const meters = walkMeters(req.from.lat, req.from.lon, req.to.lat, req.to.lon)
-  const sec = walkSeconds(meters)
+function walkOnly(req: PlanRequest, departure: number, midnightMs: number, ends: Ends): Option | null {
+  // Along paths when both ends are near them, otherwise in a straight line plus a detour.
+  const { reach } = ends.from
+  const target = ends.to.reach?.from
+  const along = ends.walking && reach && target ? reach.costTo(target) : null
+  const traced = along && reach && target ? reach.pathTo(target) : null
+  const path = traced && traced.length > 0 ? traced : null
+  if (ends.walking && reach && target && !along) return null // farther than the search went
+  const meters = along ? Math.round(along.meters) : walkMeters(req.from.lat, req.from.lon, req.to.lat, req.to.lon)
+  const sec = along ? Math.round(along.sec) : walkSeconds(meters)
   if (sec > MAX_WALK_ONLY_SEC) return null
   const start = new Date(midnightMs + departure * 1000).toISOString()
   const end = new Date(midnightMs + (departure + sec) * 1000).toISOString()
@@ -316,10 +421,13 @@ function walkOnly(req: PlanRequest, departure: number, midnightMs: number): Opti
           to: req.to,
           route: null,
           fareIdr: null,
-          geometry: [
-            [req.from.lon, req.from.lat],
-            [req.to.lon, req.to.lat],
-          ],
+          geometry: path
+            ? pathGeometry(path)
+            : [
+                [req.from.lon, req.from.lat],
+                [req.to.lon, req.to.lat],
+              ],
+          ...(path && ends.walking ? { steps: walkSteps(ends.walking.net, path) } : {}),
         },
       ],
     },

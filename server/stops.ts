@@ -11,17 +11,29 @@ const SAME_PLACE_M = 600
 /** A BRT halte farther than this makes a misleading "Dekat Halte …" hint. */
 const MAX_BRT_HINT_M = 1500
 
-/** GTFS halte names abbreviate a lot; spelled out, "stasiun gambir" finds "St. Gambir 1". */
+/**
+ * Halte and place names abbreviate a lot; spelled out, "stasiun gambir" finds "St. Gambir 1" and "rs" a Rumah Sakit.
+ * Words spelled two ways are written one way: plasa and plaza, mesjid and masjid.
+ */
 const ABBREVIATIONS: Record<string, string> = {
+  apt: 'apartemen',
+  bunderan: 'bundaran',
   gg: 'gang',
   jl: 'jalan',
   jln: 'jalan',
+  kab: 'kabupaten',
   kb: 'kebon',
+  kedubes: 'kedutaan besar',
   kec: 'kecamatan',
   kel: 'kelurahan',
   komp: 'komplek',
   kp: 'kampung',
+  mal: 'mall',
+  mesjid: 'masjid',
+  perum: 'perumahan',
+  plasa: 'plaza',
   ps: 'pasar',
+  rs: 'rumah sakit',
   sbr: 'seberang',
   st: 'stasiun',
   term: 'terminal',
@@ -67,10 +79,14 @@ export function searchStops(tt: Timetable, query: string): PlaceResult[] {
   const text = q.join(' ')
   if (text.length < 2) return []
 
+  // "rs koja" is RSUD Koja as much as Rumah Sakit Koja: the words as typed count too.
+  const typed = words(query, false)
+  const typedText = typed.join(' ')
   const aliased = aliasScores(text)
   const found: { halte: Halte; score: number }[] = []
   for (const halte of haltes(tt)) {
-    const score = Math.min(aliased.get(halte.base) ?? Infinity, matchScore(halte, q, text))
+    let score = Math.min(aliased.get(halte.base) ?? Infinity, matchScore(halte, q, text))
+    if (typedText !== text) score = Math.min(score, matchScore(halte, typed, typedText))
     if (score < Infinity) found.push({ halte, score })
   }
   // Busier haltes first among equal matches: they are the ones people mean.
@@ -91,12 +107,18 @@ function matchScore(halte: Halte, q: string[], text: string): number {
   return Math.min(...[halte.words, ...halte.stopWords].map((name) => nameScore(name, q, text)))
 }
 
-/** 0 for the whole name, 1 when the name starts with the query, 2 when every query word starts a word of the name. */
+/**
+ * 0 for the whole name, 1 when the name starts with the query, 2 when every query word
+ * starts a word of the name or the name starts with the query written with other
+ * spaces ("pulogadung" for Pulo Gadung).
+ */
 function nameScore(name: string[], q: string[], text: string): number {
   const full = name.join(' ')
   if (full === text) return 0
   if (full.startsWith(text)) return 1
-  return q.every((w) => name.some((nw) => nw.startsWith(w))) ? 2 : Infinity
+  if (q.every((w) => name.some((nw) => nw.startsWith(w)))) return 2
+  const typed = q.join('')
+  return typed.length >= 5 && name.join('').startsWith(typed) ? 2 : Infinity
 }
 
 /** Haltes an alias points at, scored like matchScore. */
@@ -130,14 +152,14 @@ function describe(tt: Timetable, routes: number[], near: string | undefined): st
 }
 
 /** Lowercase words with abbreviations spelled out: "Sbr. St. Gambir" → seberang stasiun gambir. */
-export function words(s: string): string[] {
-  return s
+export function words(s: string, spelledOut = true): string[] {
+  const plain = s
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter(Boolean)
-    .map((w) => ABBREVIATIONS[w] ?? w)
+  return spelledOut ? plain.flatMap((w) => (ABBREVIATIONS[w] ?? w).split(' ')) : plain
 }
 
 /**
@@ -214,7 +236,7 @@ function haltes(tt: Timetable): Halte[] {
         words: text.split(' '),
         text,
         base,
-        stopWords: stopNames.length > 1 ? stopNames.map(words) : [],
+        stopWords: stopNames.length > 1 ? stopNames.map((n) => words(n)) : [],
         lat: Math.round(mean(tt.stopLat) * 1e6) / 1e6,
         lon: Math.round(mean(tt.stopLon) * 1e6) / 1e6,
         routes: [...routes],
