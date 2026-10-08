@@ -50,15 +50,21 @@ test('short names go to the place riders mean, wherever they ask from', () => {
     ['kokas', /^Kota Kasablanka$/],
     ['unj', /^Universitas Negeri Jakarta$/],
     ['cgk', /^Bandar Udara Internasional Soekarno-Hatta$/],
+    // Bekasi and Tangerang have a Jalan MH Thamrin too; every DPRD starts with the DPR's words.
+    ['mh thamrin', /^Jalan Mohammad Husni Thamrin$/],
+    ['dpr', /^Dewan Perwakilan Rakyat \/ Majelis Permusyawaratan Rakyat$/],
   ]
-  // Depok, Bekasi, Bogor, Tangerang and Tanjung Priok.
+  // Depok, Bekasi, Bogor, Tangerang, Tigaraksa and Tanjung Priok.
   const from = [
     { lat: -6.3946, lon: 106.8226 },
     { lat: -6.2383, lon: 106.9756 },
     { lat: -6.595, lon: 106.8166 },
     { lat: -6.1783, lon: 106.6319 },
+    { lat: -6.262, lon: 106.476 },
     { lat: -6.11, lon: 106.88 },
   ]
+  // From Bogor, the avenue in Jakarta Pusat, not the Jalan MH Thamrin in Kab. Bekasi.
+  assert.match(places.search('mh thamrin', from[2])[0].address, /Jakarta Pusat$/)
   for (const [q, want] of cases) {
     for (const near of from) assert.match(places.search(q, near)[0].name, want, `${q} from ${JSON.stringify(near)}`)
   }

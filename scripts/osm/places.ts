@@ -81,8 +81,9 @@ const UNINITIALED = new Set(['dan', 'di', 'ke', 'dr', 'prof', 'h', 'hj', 'ir'])
  */
 const NICKNAMES: [nickname: string, name: RegExp, city?: string][] = [
   ['Ambassador', /^mall ambasador$/],
-  ['DPR', /^dewan perwakilan rakyat\b/],
-  ['Gedung DPR', /^dewan perwakilan rakyat\b/],
+  // Not the DPRD of every city and regency, which starts with the same words.
+  ['DPR', /^dewan perwakilan rakyat( majelis permusyawaratan rakyat)?$/],
+  ['Gedung DPR', /^dewan perwakilan rakyat( majelis permusyawaratan rakyat)?$/],
   ['MPR', /\bmajelis permusyawaratan rakyat$/],
   ['FX Sudirman', /^fx mall$/],
   ['Istiqlal', /^masjid istiqlal$/],
