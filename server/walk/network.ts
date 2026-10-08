@@ -9,6 +9,12 @@ import { COORD_SCALE, WAY_KINDS, type WalkFile, type WayKind } from './format.ts
 
 /** Stairs take longer than their length suggests. */
 const STEPS_SLOWDOWN = 1.6
+/**
+ * A walk this short goes straight when the paths take longer: from a pin at a
+ * halte to the halte, between the platforms of one halte, which the paths
+ * around it would send across the road and back.
+ */
+const SHORTCUT_M = 50
 
 const M_PER_DEG = 111_320
 const CELL_DEG = 0.002 // ~220 m
@@ -63,6 +69,8 @@ export class WalkNetwork {
   private readonly cells = new Map<number, number>()
   private readonly cellStart: Int32Array
   private readonly cellEdges: Int32Array
+  /** Per node, the connected network it belongs to (a node number standing for it). */
+  private readonly network: Int32Array
   private readonly spaces: SearchSpace[] = []
 
   constructor(file: WalkFile) {
@@ -110,6 +118,15 @@ export class WalkNetwork {
       this.adjEdge[fill[this.edgeB[i]]++] = i
     }
 
+    // Connected networks, by union-find over the edges.
+    const parent = Int32Array.from({ length: this.nodeCount }, (_, n) => n)
+    const root = (n: number): number => {
+      while (parent[n] !== n) n = parent[n] = parent[parent[n]]
+      return n
+    }
+    for (let i = 0; i < edges; i++) parent[root(this.edgeA[i])] = root(this.edgeB[i])
+    this.network = Int32Array.from({ length: this.nodeCount }, (_, n) => root(n))
+
     // A grid of the edges crossing each ~220 m cell, for snapping.
     const counts: number[] = []
     const forCells = (i: number, fn: (key: number) => void) => {
@@ -154,8 +171,13 @@ export class WalkNetwork {
     return Math.sqrt(dx * dx + dy * dy)
   }
 
-  /** The nearest point on a path within maxM of (lat, lon), or null when there is none. */
-  snap(lat: number, lon: number, maxM: number): Snap | null {
+  /** The connected network an edge is on: walks never leave it. */
+  networkOf(edge: number): number {
+    return this.network[this.edgeA[edge]]
+  }
+
+  /** The nearest point on a path within maxM of (lat, lon), or null when there is none; `accept` picks the edges allowed. */
+  snap(lat: number, lon: number, maxM: number, accept?: (edge: number) => boolean): Snap | null {
     const k = Math.cos(lat * (Math.PI / 180)) * M_PER_DEG
     const y0 = cellY(lat)
     const x0 = cellX(lon)
@@ -171,6 +193,7 @@ export class WalkNetwork {
           if (slot === undefined) continue
           for (let i = this.cellStart[slot]; i < this.cellStart[slot + 1]; i++) {
             const e = this.cellEdges[i]
+            if (accept && !accept(e)) continue
             const a = this.edgeA[e]
             const b = this.edgeB[e]
             const ax = (this.lon[a] - lon) * k
@@ -251,10 +274,19 @@ export class Reach {
 
   /** The walk to a snapped point, both straight steps onto and off the paths included. */
   costTo(to: Snap): WalkCost | null {
-    const end = this.end(to)
-    if (!end) return null
+    const walk = this.walkTo(to)
+    if (!walk) return null
+    if (walk.straight !== null) return { meters: walk.straight, sec: walk.straight / WALK_SPEED, cost: walk.straight }
     const off = this.from.offsetM + to.offsetM
-    return { meters: end.meters + off, sec: end.sec + off / WALK_SPEED, cost: end.cost + off }
+    return { meters: walk.end.meters + off, sec: walk.end.sec + off / WALK_SPEED, cost: walk.end.cost + off }
+  }
+
+  /** Along the paths, or straight when that is short and shorter (see SHORTCUT_M). */
+  private walkTo(to: Snap): { end: WalkCost & { node: number }; straight: null } | { end: null; straight: number } | null {
+    const end = this.end(to)
+    const direct = this.net.meters(this.from.fromLat, this.from.fromLon, to.fromLat, to.fromLon)
+    if (direct <= SHORTCUT_M && (!end || direct < end.meters + this.from.offsetM + to.offsetM)) return { end: null, straight: direct }
+    return end ? { end, straight: null } : null
   }
 
   /** The cheapest way onto the target edge: through one of its nodes, or along the start edge itself. */
@@ -284,9 +316,13 @@ export class Reach {
 
   /** The walk to a snapped point as straight pieces, from the start point to the target point. */
   pathTo(to: Snap): Stretch[] | null {
-    const end = this.end(to)
-    if (!end) return null
+    const walk = this.walkTo(to)
+    if (!walk) return null
     const { net, space: s, from } = this
+    if (walk.straight !== null) {
+      return walk.straight > 0.01 ? [{ from: [from.fromLon, from.fromLat], to: [to.fromLon, to.fromLat], meters: walk.straight, chain: -1 }] : []
+    }
+    const { end } = walk
     const point = (n: number): LonLat => [net.lon[n], net.lat[n]]
     const out: Stretch[] = []
     const add = (a: LonLat, b: LonLat, chain: number) => {

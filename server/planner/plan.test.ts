@@ -143,7 +143,8 @@ describe('planTrip', () => {
     assert.equal(walkIn.steps?.[0].bearing, 0)
     assert.ok(Math.abs(walkIn.distanceM - 445) < 5, `walk ${walkIn.distanceM} m`)
 
-    assert.equal(ride.headsign, 'D')
+    // Headed for the far end of its trip, whatever GTFS calls the trip.
+    assert.equal(ride.headsign, 'Halte D')
     assert.deepEqual(
       ride.stops?.map((s) => s.name),
       ['Halte C'],

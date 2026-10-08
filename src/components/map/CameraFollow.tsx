@@ -14,13 +14,15 @@ type Props = {
   sheet: RefObject<HTMLElement | null>
   // The panel shows a message instead of routes (no trip, an error), which can make it taller.
   message: boolean
+  // The panel shows an option's details instead of the list: another height again.
+  detail: boolean
 }
 
 const MONAS: [number, number] = [106.8272, -6.1754]
 
 // Moves the camera to whatever the user is looking at: the selected
 // route, otherwise the chosen endpoints, otherwise central Jakarta.
-export function CameraFollow({ origin, destination, itinerary, focus, sheet, message }: Props) {
+export function CameraFollow({ origin, destination, itinerary, focus, sheet, message, detail }: Props) {
   const { current: map } = useMap()
   const placed = useRef(false)
 
@@ -39,8 +41,8 @@ export function CameraFollow({ origin, destination, itinerary, focus, sheet, mes
     return () => {
       cancelled = true
     }
-    // message is not read above: it changes the panel's height, so the camera fits again.
-  }, [map, origin, destination, itinerary, focus, sheet, message])
+    // message and detail are not read above: they change the panel's height, so the camera fits again.
+  }, [map, origin, destination, itinerary, focus, sheet, message, detail])
 
   return null
 }

@@ -205,6 +205,14 @@ export const FootbridgeIcon = (p: IconProps) => (
   </Icon>
 )
 
+/** A small bridge over a ditch or a river: an arched deck above the water. */
+export const BridgeIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M2.5 14.5C6 9 18 9 21.5 14.5v2h-19Z" {...tint} />
+    <path d="M2.5 20c1.6.9 3.1.9 4.7 0s3.1-.9 4.8 0 3.1.9 4.8 0 3.1-.9 4.7 0" />
+  </Icon>
+)
+
 export const UnderpassIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M2.5 5.5h19" />

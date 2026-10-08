@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs'
 import type { StopWalk } from '../router/raptor.ts'
 import type { Timetable } from '../timetable/timetable.ts'
-import { DETOUR, WALK_SPEED } from './estimate.ts'
+import { DETOUR } from './estimate.ts'
 import { decodeWalk, type WalkFile } from './format.ts'
 import { WalkNetwork, type Reach, type Snap, type Stretch } from './network.ts'
 
@@ -23,16 +23,23 @@ export class Walking {
   readonly tt: Timetable
   /** Each halte's spot on the paths, or null when none is near. */
   readonly stopSnap: (Snap | null)[]
+  /**
+   * The path networks holding a halte. Trip ends only snap onto those: the
+   * footways around a mall, mapped without the way out to the street, reach no
+   * halte at all.
+   */
+  private readonly withHalte: Set<number>
 
   constructor(net: WalkNetwork, tt: Timetable) {
     this.net = net
     this.tt = tt
     this.stopSnap = Array.from({ length: tt.stopCount }, (_, s) => net.snap(tt.stopLat[s], tt.stopLon[s], STOP_SNAP_M))
+    this.withHalte = new Set(this.stopSnap.flatMap((snap) => (snap ? [net.networkOf(snap.edge)] : [])))
   }
 
   /** Walks from a point onto the paths, as far as maxMeters reaches; null when no path is near. */
   reach(lat: number, lon: number, maxMeters: number, slot: number): Reach | null {
-    const snap = this.net.snap(lat, lon, POINT_SNAP_M)
+    const snap = this.net.snap(lat, lon, POINT_SNAP_M, (edge) => this.withHalte.has(this.net.networkOf(edge)))
     // Stairs and private roads cost more than their meters, so the search goes a little further.
     return snap ? this.net.search(snap, maxMeters * 1.6, slot) : null
   }
@@ -63,8 +70,7 @@ export class Walking {
     return Array.from({ length: this.tt.stopCount }, (_, s) => {
       const flat: number[] = []
       for (let i = file.transferStart[s]; i < file.transferStart[s + 1]; i++) {
-        const meters = file.transferMeters[i]
-        flat.push(file.transferStop[i], meters, Math.round(meters / WALK_SPEED))
+        flat.push(file.transferStop[i], file.transferMeters[i], file.transferSeconds[i])
       }
       return Int32Array.from(flat)
     })
@@ -76,11 +82,12 @@ export class Walking {
  * stores them. Run once by the data build: a search per halte takes minutes
  * on a laptop, too long for a function's cold start.
  */
-export function pathTransfers(walking: Walking): Pick<WalkFile, 'transferStart' | 'transferStop' | 'transferMeters'> {
+export function pathTransfers(walking: Walking): Pick<WalkFile, 'transferStart' | 'transferStop' | 'transferMeters' | 'transferSeconds'> {
   const { tt, net, stopSnap } = walking
   const start = new Int32Array(tt.stopCount + 1)
   const stops: number[] = []
   const meters: number[] = []
+  const seconds: number[] = []
   for (let s = 0; s < tt.stopCount; s++) {
     const from = stopSnap[s]
     if (from) {
@@ -91,12 +98,18 @@ export function pathTransfers(walking: Walking): Pick<WalkFile, 'transferStart' 
         if (walk && walk.meters <= TRANSFER_M) {
           stops.push(near.stop)
           meters.push(Math.round(walk.meters))
+          seconds.push(Math.round(walk.sec))
         }
       }
     }
     start[s + 1] = stops.length
   }
-  return { transferStart: start, transferStop: Int32Array.from(stops), transferMeters: Int32Array.from(meters) }
+  return {
+    transferStart: start,
+    transferStop: Int32Array.from(stops),
+    transferMeters: Int32Array.from(meters),
+    transferSeconds: Int32Array.from(seconds),
+  }
 }
 
 let network: { net: WalkNetwork; file: WalkFile } | null | undefined
@@ -115,13 +128,17 @@ export function loadWalking(tt: Timetable): Walking | null {
       const file = decodeWalk(readFileSync(new URL('../../data/walk.bin', import.meta.url)))
       network = { net: new WalkNetwork(file), file }
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
-      console.warn('data/walk.bin tidak ada: jalan kaki memakai estimasi garis lurus. Jalankan pnpm data:build.')
+      // Missing or broken, the paths are left out once, not on every request: walks stay straight-line estimates.
+      const missing = (err as NodeJS.ErrnoException).code === 'ENOENT'
+      console.warn(`data/walk.bin ${missing ? 'tidak ada' : `tidak terbaca (${(err as Error).message})`}: jalan kaki memakai estimasi garis lurus. Jalankan pnpm data:build.`)
       network = null
     }
   }
   const walking = network ? new Walking(network.net, tt) : null
-  if (walking && sameStops(network!.file.stopIds, tt.stopId)) tt.transfers = walking.transfers(network!.file)
+  if (walking) {
+    if (sameStops(network!.file.stopIds, tt.stopId)) tt.transfers = walking.transfers(network!.file)
+    else console.warn('data/walk.bin dibuat untuk jadwal lain: transfer antarhalte memakai estimasi garis lurus. Jalankan pnpm data:build.')
+  }
   loaded = { tt, walking }
   return walking
 }

@@ -2,8 +2,9 @@
 
 import type { Itinerary, Leg, Place, Plan } from '../../shared/api.ts'
 import { quoteFares } from '../fare.ts'
-import { lineLengthM, type LonLat } from '../geo.ts'
+import { distanceM, lineLengthM, type LonLat } from '../geo.ts'
 import { raptor, type Journey, type ServiceDay, type StopWalk, type WalkLeg } from '../router/raptor.ts'
+import { placeName } from '../stops.ts'
 import { addDays, wibDay, type WibDay } from '../../shared/time.ts'
 import type { Pattern, Timetable } from '../timetable/timetable.ts'
 import { walkMeters, walkSeconds } from '../walk/estimate.ts'
@@ -175,6 +176,12 @@ function nearby(tt: Timetable, ends: Ends, end: End, s: Search, today: Uint8Arra
 
 /** A router walk along paths, from start to end of the leg; null when either end is off the paths. */
 function walkPath(ends: Ends, l: WalkLeg): Stretch[] | null {
+  const path = pathOf(ends, l)
+  // Nothing to draw (the two points are one): a straight line stands in.
+  return path && path.length > 0 ? path : null
+}
+
+function pathOf(ends: Ends, l: WalkLeg): Stretch[] | null {
   const { walking } = ends
   if (!walking) return null
   if (l.kind === 'transfer') return walking.between(l.from, l.to)
@@ -191,7 +198,7 @@ function walkPath(ends: Ends, l: WalkLeg): Stretch[] | null {
 const reversed = (path: Stretch[]): Stretch[] => path.toReversed().map((p) => ({ ...p, from: p.to, to: p.from }))
 
 function pathGeometry(path: Stretch[]): LonLat[] {
-  return path.length === 0 ? [] : [path[0].from, ...path.map((p) => p.to)]
+  return [path[0].from, ...path.map((p) => p.to)]
 }
 
 type Option = {
@@ -263,7 +270,7 @@ function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs:
         },
         fareIdr: null,
         geometry,
-        headsign: pat.headsign,
+        headsign: headsign(tt, pat, l.board),
         stops: Array.from({ length: Math.max(0, l.alight - l.board - 1) }, (_, k) => place(pat.stops[l.board + 1 + k], req.from)),
       }
       legs.push(leg)
@@ -325,7 +332,10 @@ function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs:
   const quote = quoteFares(
     rides.map((r) => ({ routeId: r.routeId, product: tt.fares[r.fare], boardMs: r.boardMs })),
   )
-  rides.forEach((r, i) => (r.leg.fareIdr = quote.charges[i]))
+  rides.forEach((r, i) => {
+    r.leg.fareIdr = quote.charges[i]
+    if (quote.covered[i]) r.leg.fareCovered = true
+  })
 
   const startMs = Date.parse(legs[0].start)
   const endMs = Date.parse(legs.at(-1)!.end)
@@ -341,6 +351,28 @@ function toOption(tt: Timetable, journey: Journey, req: PlanRequest, midnightMs:
       legs,
     },
   }
+}
+
+/**
+ * Where a bus is headed, as its sign would say. TransJakarta's GTFS headsigns name both
+ * ends of the route ("Pancoran dan Puri Beta") whichever way the bus goes, and most trips
+ * run there and back: out to the halte farthest from where they start, then home again.
+ * Before that halte the bus is headed for it; after it, for the end of the trip.
+ */
+function headsign(tt: Timetable, pat: Pattern, board: number): string {
+  const { stops } = pat
+  const first = stops[0]
+  let turn = 0
+  let turnM = -1
+  for (let k = 0; k < stops.length; k++) {
+    const m = distanceM(tt.stopLat[first], tt.stopLon[first], tt.stopLat[stops[k]], tt.stopLon[stops[k]])
+    if (m > turnM) {
+      turnM = m
+      turn = k
+    }
+  }
+  const to = placeName(tt.stopName[board < turn ? stops[turn] : stops[stops.length - 1]])
+  return to !== placeName(tt.stopName[stops[board]]) ? to : pat.headsign
 }
 
 /** The pattern's shape between two stops, or straight lines through its stops without one. */
@@ -361,7 +393,8 @@ function walkOnly(req: PlanRequest, departure: number, midnightMs: number, ends:
   const { reach } = ends.from
   const target = ends.to.reach?.from
   const along = ends.walking && reach && target ? reach.costTo(target) : null
-  const path = along && reach && target ? reach.pathTo(target) : null
+  const traced = along && reach && target ? reach.pathTo(target) : null
+  const path = traced && traced.length > 0 ? traced : null
   if (ends.walking && reach && target && !along) return null // farther than the search went
   const meters = along ? Math.round(along.meters) : walkMeters(req.from.lat, req.from.lon, req.to.lat, req.to.lon)
   const sec = along ? Math.round(along.sec) : walkSeconds(meters)

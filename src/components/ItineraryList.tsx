@@ -25,7 +25,7 @@ type Props = {
 export function ItineraryList({ plan, departure, picked, preference, selectedId, onOpen, refocus = false }: Props) {
   const list = useRef<HTMLUListElement>(null)
   useEffect(() => {
-    if (refocus) list.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus()
+    if (refocus) list.current?.querySelector<HTMLButtonElement>('button[aria-current="true"]')?.focus()
   }, [refocus])
   // "besok" on a label follows the clock, so it reads right after midnight too.
   const minute = useMinute()
@@ -70,7 +70,8 @@ function ItineraryCard(props: {
   return (
     <motion.button
       type="button"
-      aria-pressed={selected}
+      // The option shown on the map; activating any card opens its details.
+      aria-current={selected ? 'true' : undefined}
       aria-description="Buka detail rute"
       onClick={props.onOpen}
       whileTap={{ scale: 0.98 }}
@@ -105,13 +106,13 @@ function ItineraryCard(props: {
 
       <LegStrip legs={it.legs} />
 
-      <div className="mt-3 flex items-center gap-1.5">
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
         {winsAt.map((label) => (
           <span key={label} className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-white">
             {label}
           </span>
         ))}
-        <span className="ml-auto flex items-center gap-0.5 text-xs font-semibold text-brand">
+        <span className="ml-auto flex items-center gap-0.5 text-xs font-semibold whitespace-nowrap text-brand">
           Lihat detail
           <ChevronIcon className="size-3.5" />
         </span>

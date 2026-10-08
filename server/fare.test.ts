@@ -16,7 +16,7 @@ const ride = (product: FareProduct | undefined, hhmm: string, routeId = 'TJ:1') 
 
 test('one ticket covers transfers within three hours', () => {
   const q = quoteFares([ride(regular, '08:00'), ride(regular, '09:30'), ride(regular, '11:00')])
-  assert.deepEqual(q, { total: 3500, charges: [3500, 0, 0], complete: true })
+  assert.deepEqual(q, { total: 3500, charges: [3500, 0, 0], covered: [false, true, true], complete: true })
 })
 
 test('a new ticket is needed after three hours', () => {
@@ -26,7 +26,7 @@ test('a new ticket is needed after three hours', () => {
 
 test('different products are paid separately', () => {
   const q = quoteFares([ride(regular, '08:00'), ride(royal, '08:30', 'TJ:1T'), ride(regular, '09:00')])
-  assert.deepEqual(q, { total: 23_500, charges: [3500, 20_000, 0], complete: true })
+  assert.deepEqual(q, { total: 23_500, charges: [3500, 20_000, 0], covered: [false, false, true], complete: true })
 })
 
 test('limited transfers run out', () => {
@@ -45,5 +45,11 @@ test('TransJakarta costs Rp2.000 from 05:00 to 07:00', () => {
 
 test('unknown fares make the total a lower bound', () => {
   const q = quoteFares([ride(regular, '08:00'), ride(undefined, '08:30', 'KRL:bogor')])
-  assert.deepEqual(q, { total: 3500, charges: [3500, null], complete: false })
+  assert.deepEqual(q, { total: 3500, charges: [3500, null], covered: [false, false], complete: false })
+})
+
+test('a free route stays free however often it is ridden', () => {
+  const mikrotrans: FareProduct = { id: 'TJ:MK', price: 0, transfers: -1, transferDurationSec: 10_800 }
+  const q = quoteFares([ride(mikrotrans, '08:00', 'TJ:JAK.41'), ride(mikrotrans, '08:30', 'TJ:JAK.17'), ride(regular, '08:40'), ride(regular, '09:00')])
+  assert.deepEqual(q, { total: 3500, charges: [0, 0, 3500, 0], covered: [false, false, false, true], complete: true })
 })

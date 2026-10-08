@@ -8,6 +8,7 @@ import type { PickedTime } from '../lib/trip'
 import { lateStart } from '../lib/itinerary'
 import {
   ArrowLeftIcon,
+  BridgeIcon,
   BusIcon,
   ChevronDownIcon,
   CrossingIcon,
@@ -51,41 +52,77 @@ export function RouteDetail(props: Props) {
   useEffect(() => back.current?.focus({ preventScroll: true }), [])
   const legs = it.legs
   const rail = (leg: Leg | undefined): Rail | null => (leg ? (leg.route ? { kind: 'ride', color: colorOf(leg) } : { kind: 'walk' }) : null)
-  const firstRide = legs.findIndex((l) => l.route)
+  // How long the rider stands at the halte before the bus comes.
+  const waitBefore = (i: number) => (Date.parse(legs[i].start) - Date.parse(i > 0 ? legs[i - 1].end : it.start)) / 1000
+  const waiting = (i: number) => (waitBefore(i) >= 60 ? `tunggu ${formatDuration(waitBefore(i))}` : '')
   const rows: ReactNode[] = [
     // Starting right at a halte, the board row below carries the line on.
     <Waypoint key="start" time={it.start} title={props.originName} note="Berangkat" marker="start" below={legs[0]?.route ? null : rail(legs[0])} />,
   ]
   legs.forEach((leg, i) => {
+    const prev = legs[i - 1]
     const next = legs[i + 1]
     const focused = props.focus === i
     const toggle = () => props.onFocus(focused ? null : i)
     if (leg.route) {
-      rows.push(
-        <Waypoint key={`board${i}`} time={leg.start} title={leg.from.name} note="Naik di halte ini" marker="stop" above={rail(legs[i - 1])} below={rail(leg)} />,
-        <RideRow key={`ride${i}`} leg={leg} first={i === firstRide} focused={focused} onFocus={toggle} />,
-        <Waypoint
-          key={`alight${i}`}
-          time={leg.end}
-          title={leg.to.name}
-          note={next?.route ? 'Turun, lalu pindah bus di halte ini' : 'Turun di halte ini'}
-          marker="stop"
-          above={rail(leg)}
-          below={next ? rail(next) : null}
-        />,
-      )
+      // Off one bus and onto the next at the same halte: one stop on the line, not two.
+      if (!prev?.route) {
+        const wait = waiting(i)
+        rows.push(
+          <Waypoint
+            key={`board${i}`}
+            time={leg.start}
+            title={leg.from.name}
+            note={wait ? `${capitalize(wait)}, lalu naik` : 'Naik di halte ini'}
+            marker="stop"
+            above={rail(prev)}
+            below={rail(leg)}
+          />,
+        )
+      }
+      rows.push(<RideRow key={`ride${i}`} leg={leg} focused={focused} onFocus={toggle} />)
+      if (next?.route) {
+        const wait = waiting(i + 1)
+        rows.push(
+          <Waypoint
+            key={`change${i}`}
+            time={leg.end}
+            title={leg.to.name}
+            note={`Turun, lalu pindah ke ${next.route.shortName}${wait ? ` · ${wait}` : ''}`}
+            marker="stop"
+            above={rail(leg)}
+            below={rail(next)}
+          />,
+        )
+      } else if (next) {
+        rows.push(
+          <Waypoint
+            key={`alight${i}`}
+            time={leg.end}
+            title={leg.to.name}
+            note={legs[i + 2]?.route ? 'Turun, lalu pindah bus' : 'Turun di halte ini'}
+            marker="stop"
+            above={rail(leg)}
+            below={rail(next)}
+          />,
+        )
+      }
     } else {
-      const target = next ? `Halte ${leg.to.name}` : props.destinationName
-      rows.push(<WalkRow key={`walk${i}`} leg={leg} target={target} focused={focused} onFocus={toggle} />)
+      const toHalte = next !== undefined
+      const target = toHalte ? halteName(leg.to.name) : props.destinationName
+      rows.push(<WalkRow key={`walk${i}`} leg={leg} target={target} toHalte={toHalte} focused={focused} onFocus={toggle} />)
     }
   })
+  // Ending at the halte itself, getting off is arriving.
+  const endsOnBus = legs.at(-1)?.route
   rows.push(
-    <Waypoint key="end" time={it.end} title={props.destinationName} note="Tiba" marker="end" above={legs.at(-1)?.route ? null : rail(legs.at(-1))} />,
+    <Waypoint key="end" time={it.end} title={props.destinationName} note={endsOnBus ? 'Turun di halte ini · tiba' : 'Tiba'} marker="end" above={rail(legs.at(-1))} />,
   )
 
   return (
     <section aria-labelledby={headingId} className="pb-2">
-      <div className="flex items-start gap-1">
+      {/* Stays at the top while the steps scroll, so the way back and the totals are always there. */}
+      <div className="sticky top-0 z-10 -mx-5 flex items-start gap-1 bg-white px-5 pt-2 pb-2 lg:pt-4">
         <motion.button
           ref={back}
           type="button"
@@ -97,7 +134,7 @@ export function RouteDetail(props: Props) {
           <ArrowLeftIcon className="size-5" />
         </motion.button>
         <div className="min-w-0 flex-1 pt-0.5">
-          <h2 id={headingId} className="truncate text-xs font-semibold text-slate-500">
+          <h2 id={headingId} className="line-clamp-2 text-xs font-semibold text-slate-500">
             Rute ke {props.destinationName}
           </h2>
           <div className="flex items-baseline justify-between gap-3">
@@ -115,7 +152,7 @@ export function RouteDetail(props: Props) {
       </div>
       {(late || props.winsAt.length > 0) && (
         // One line that scrolls sideways, so a narrow phone does not spend two lines on labels.
-        <div className="-mx-5 mt-2 flex gap-1.5 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="-mx-5 mt-1 flex gap-1.5 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {late && <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{late}</span>}
           {props.winsAt.map((label) => (
             <span key={label} className="shrink-0 rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-white">
@@ -158,8 +195,9 @@ function JourneyRibbon({ legs }: { legs: Leg[] }) {
             style={{ ...style, backgroundColor: background, color: readableOn(background, leg.route.textColor || '#ffffff') }}
             className="flex min-w-6 items-center justify-center gap-0.5 overflow-hidden rounded-full px-1.5 text-[11px] font-bold"
           >
-            {share > 0.1 && <BusIcon className="size-3.5 shrink-0" />}
-            <span className="truncate">{leg.route.shortName}</span>
+            {/* A short ride's band has room for the icon or the number, not a cut-off "J…". */}
+            {share >= 0.1 && <BusIcon className="size-3.5 shrink-0" />}
+            {share >= 0.08 + leg.route.shortName.length * 0.025 && <span className="whitespace-nowrap">{leg.route.shortName}</span>}
           </div>
         )
       })}
@@ -180,12 +218,13 @@ function RailLine({ rail, half }: { rail: Rail | null; half?: 'top' | 'bottom' }
   )
 }
 
-function Row(props: { time?: string; rail: ReactNode; children: ReactNode; className?: string }) {
+/** One row of the timeline; the space below a leg is inside its cells, so the rail runs on through it. */
+function Row(props: { time?: string; rail: ReactNode; children: ReactNode; className?: string; leg?: boolean }) {
   return (
     <li className={`grid grid-cols-[3rem_1.75rem_1fr] gap-x-2 ${props.className ?? ''}`}>
       <span className="pt-0.5 text-right text-xs font-semibold text-slate-500 tabular-nums">{props.time ? formatClock(props.time) : ''}</span>
       <span className="relative">{props.rail}</span>
-      <div className="min-w-0">{props.children}</div>
+      <div className={`min-w-0 ${props.leg ? 'pb-3' : ''}`}>{props.children}</div>
     </li>
   )
 }
@@ -198,7 +237,8 @@ function Waypoint(props: {
   above?: Rail | null
   below?: Rail | null
 }) {
-  const ring = props.below?.kind === 'ride' ? props.below.color : props.above?.kind === 'ride' ? props.above.color : '#0f766e'
+  // The line the halte is on: the bus arriving, or else the one leaving.
+  const ring = props.above?.kind === 'ride' ? props.above.color : props.below?.kind === 'ride' ? props.below.color : '#0f766e'
   const marker =
     props.marker === 'end' ? (
       <span className="relative z-10 grid size-6 place-items-center rounded-full bg-accent text-slate-900 ring-4 ring-white">
@@ -221,24 +261,28 @@ function Waypoint(props: {
       }
       className="min-h-11"
     >
-      <p className="truncate pt-px text-sm font-semibold text-slate-900">{props.title}</p>
+      <p className="line-clamp-2 pt-px text-sm font-semibold break-words text-slate-900">{props.title}</p>
       <p className="text-xs text-slate-500">{props.note}</p>
     </Row>
   )
 }
 
-function WalkRow({ leg, target, focused, onFocus }: { leg: Leg; target: string; focused: boolean; onFocus: () => void }) {
+/** A walk this short (across the platform, a few steps to the door) needs no directions. */
+const SHORT_WALK_M = 50
+
+function WalkRow(props: { leg: Leg; target: string; toHalte: boolean; focused: boolean; onFocus: () => void }) {
+  const { leg, target, toHalte, focused, onFocus } = props
   const [open, setOpen] = useState(false)
   const listId = useId()
-  const steps = leg.steps ?? []
+  const steps = leg.distanceM >= SHORT_WALK_M ? (leg.steps ?? []) : []
   // The longest named streets say which way the walk goes before anyone opens the steps.
   const via = [...new Map(steps.filter((s) => s.name).map((s) => [s.name, s])).values()]
     .sort((a, b) => b.distanceM - a.distanceM)
     .slice(0, 2)
     .map((s) => s.name)
   return (
-    <Row rail={<RailLine rail={{ kind: 'walk' }} />} className="pb-3">
-      <LegHeader focused={focused} onFocus={onFocus} label={`Jalan kaki ${formatDistance(leg.distanceM)} ke ${target}`}>
+    <Row rail={<RailLine rail={{ kind: 'walk' }} />} leg>
+      <LegHeader focused={focused} onFocus={onFocus}>
         <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-800">
           <WalkIcon className="size-4 text-slate-500" />
           Jalan kaki {formatDistance(leg.distanceM)}
@@ -272,9 +316,15 @@ function WalkRow({ leg, target, focused, onFocus }: { leg: Leg; target: string; 
                   </li>
                 ))}
                 <li className="flex items-start gap-2.5 py-2">
-                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-brand-soft text-brand">
-                    <HalteIcon className="size-3.5" />
-                  </span>
+                  {toHalte ? (
+                    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-brand-soft text-brand">
+                      <HalteIcon className="size-3.5" />
+                    </span>
+                  ) : (
+                    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-accent text-slate-900">
+                      <FlagIcon className="size-3.5" />
+                    </span>
+                  )}
                   <span className="text-sm font-medium text-slate-800">Sampai di {target}</span>
                 </li>
               </motion.ol>
@@ -290,6 +340,7 @@ function StepIcon({ step }: { step: WalkStep }) {
   const special: Partial<Record<WalkStep['way'], ReactNode>> = {
     crossing: <CrossingIcon className="size-3.5" />,
     footbridge: <FootbridgeIcon className="size-3.5" />,
+    bridge: <BridgeIcon className="size-3.5" />,
     underpass: <UnderpassIcon className="size-3.5" />,
     steps: <StairsIcon className="size-3.5" />,
   }
@@ -300,17 +351,17 @@ function StepIcon({ step }: { step: WalkStep }) {
   )
 }
 
-function RideRow({ leg, first, focused, onFocus }: { leg: Leg; first: boolean; focused: boolean; onFocus: () => void }) {
+function RideRow({ leg, focused, onFocus }: { leg: Leg; focused: boolean; onFocus: () => void }) {
   const [open, setOpen] = useState(false)
   const listId = useId()
   const route = leg.route!
   const background = colorOf(leg)
   const Icon = leg.mode === 'BUS' ? BusIcon : TrainIcon
   const passed = leg.stops ?? []
-  const fare = fareText(leg, first)
+  const fare = fareText(leg)
   return (
-    <Row rail={<RailLine rail={{ kind: 'ride', color: background }} />} className="pb-3">
-      <LegHeader focused={focused} onFocus={onFocus} label={`${serviceName(leg)} ${route.shortName}${leg.headsign ? ` arah ${leg.headsign}` : ''}`}>
+    <Row rail={<RailLine rail={{ kind: 'ride', color: background }} />} leg>
+      <LegHeader focused={focused} onFocus={onFocus}>
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span
             className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-bold"
@@ -364,22 +415,30 @@ function RideRow({ leg, first, focused, onFocus }: { leg: Leg; first: boolean; f
   )
 }
 
-/** A leg's summary; tapping it zooms the map to the leg, and again to the whole trip. */
-function LegHeader(props: { focused: boolean; onFocus: () => void; label: string; children: ReactNode }) {
+/**
+ * A leg's summary; tapping it zooms the map to the leg, and again to the whole trip.
+ * Screen readers hear the summary itself, then what tapping does; pressed means shown on the map.
+ */
+function LegHeader(props: { focused: boolean; onFocus: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
       onClick={props.onFocus}
       aria-pressed={props.focused}
-      aria-label={`${props.label}. ${props.focused ? 'Tampilkan seluruh rute di peta' : 'Lihat di peta'}`}
       className={`-mx-2 block w-[calc(100%+1rem)] rounded-xl px-2 py-1.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none ${
         props.focused ? 'bg-brand-soft/50' : 'hover:bg-slate-50'
       }`}
     >
       {props.children}
+      <span className="sr-only">. Lihat di peta</span>
     </button>
   )
 }
+
+/** "Halte Manggarai", without saying halte twice for stops already named so. */
+const halteName = (name: string) => (/^halte\b/i.test(name) ? name : `Halte ${name}`)
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 function Toggle(props: { open: boolean; onToggle: () => void; controls: string; children: ReactNode }) {
   return (

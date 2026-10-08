@@ -41,11 +41,19 @@ const WALKABLE = new Set([
   'platform',
   'crossing',
 ])
-const MOTOR_ROAD = /^(trunk|primary|secondary)(_link)?$/
-/** Flyovers and car underpasses are rarely tagged foot=no, but nobody walks them. */
+const MOTOR_ROAD = /^(trunk|primary|secondary|tertiary)(_link)?$/
+/** Flyovers and car underpasses (with their ramps) are rarely tagged foot=no, but nobody walks them. */
 const FLYOVER = /fly ?over|layang|overpass|underpass|terowongan/i
+/** Spokes across a square, at most: enough to cross it from any side. */
+const MAX_SPOKES = 48
+/** Points are added around a square this far apart, so a spoke starts near wherever one walks in. */
+const SPOKE_GAP_M = 20
+/** Roads a footbridge over them makes a jembatan penyeberangan (JPO), not just a bridge over a ditch. */
+const CROSSED_ROAD = /^(motorway|trunk|primary|secondary|tertiary)(_link)?$|^busway$/
 const RESTRICTED = new Set(['private', 'customers', 'permit', 'delivery', 'employees', 'agricultural', 'forestry'])
 const FOOT_ALLOWED = new Set(['yes', 'designated', 'permissive'])
+/** Sidewalks on the road itself; "separate" ones are mapped as footways of their own. */
+const SIDEWALK = new Set(['both', 'left', 'right', 'yes'])
 const yes = (v: string | undefined) => v !== undefined && v !== 'no'
 
 /** Whether pedestrians may use a way, and what it is; null when they may not. */
@@ -58,20 +66,29 @@ export function walkable(t: Tags): { kind: WayKind; penalty: number } | null {
   const footAllowed = FOOT_ALLOWED.has(foot ?? '')
   if (access === 'no' && !footAllowed) return null
   if (t.get('motorroad') === 'yes' && !footAllowed) return null
-  if (MOTOR_ROAD.test(highway) && (yes(t.get('bridge')) || yes(t.get('tunnel'))) && FLYOVER.test(t.get('name') ?? '')) {
-    if (!footAllowed && !t.get('sidewalk')) return null
+  // A main road is a flyover or a car underpass when its name says so (its ramps too, which
+  // often lack the bridge or tunnel tag), or when it runs on a bridge above other roads.
+  const raised = yes(t.get('bridge')) || yes(t.get('tunnel'))
+  if (MOTOR_ROAD.test(highway) && (FLYOVER.test(t.get('name') ?? '') || (raised && Number(t.get('layer')) >= 2))) {
+    if (!footAllowed && !SIDEWALK.has(t.get('sidewalk') ?? '')) return null
   }
   // Private roads (gated housing, campuses) are fine to leave or reach home by, not to cut through.
-  const penalty = RESTRICTED.has(access ?? '') && !footAllowed ? 16 : 10
-  return { kind: kindOf(highway, t), penalty }
+  const restricted = (RESTRICTED.has(access ?? '') || RESTRICTED.has(foot ?? '')) && !footAllowed
+  return { kind: kindOf(highway, t), penalty: restricted ? 16 : 10 }
 }
 
+/**
+ * What a way is, for directions. A bridge for walkers is a plain bridge here;
+ * the build makes it a footbridge (JPO) when it crosses a main road.
+ */
 function kindOf(highway: string, t: Tags): WayKind {
   const footpath = ['footway', 'path', 'pedestrian', 'cycleway', 'bridleway', 'corridor'].includes(highway)
   if (t.get('footway') === 'crossing' || highway === 'crossing' || (footpath && t.has('crossing'))) return 'crossing'
   if (highway === 'steps') return 'steps'
-  if (footpath && yes(t.get('bridge'))) return 'footbridge'
-  if (footpath && yes(t.get('tunnel'))) return 'underpass'
+  // The sidewalk of a road bridge is just more sidewalk.
+  const sidewalk = t.get('footway') === 'sidewalk'
+  if (footpath && !sidewalk && yes(t.get('bridge'))) return 'bridge'
+  if (footpath && !sidewalk && yes(t.get('tunnel')) && t.get('tunnel') !== 'building_passage') return 'underpass'
   if (highway === 'platform' || t.get('public_transport') === 'platform') return 'platform'
   if (highway === 'pedestrian') return 'pedestrian'
   if (highway === 'footway' || highway === 'corridor') return 'footway'
@@ -82,7 +99,7 @@ function kindOf(highway: string, t: Tags): WayKind {
 
 export type StopPoints = { id: string[]; lat: number[]; lon: number[] }
 
-type Way = { nodes: number[]; name: number; kind: number; penalty: number }
+type Way = { nodes: number[]; name: number; kind: number; penalty: number; area: boolean }
 
 /** The network without transfers, which need the network itself (see pathTransfers). */
 export function buildWalkFile(pbfPath: string, stops: StopPoints, builtAt: Date): WalkFile {
@@ -108,6 +125,8 @@ export function buildWalkFile(pbfPath: string, stops: StopPoints, builtAt: Date)
   }
   const names = new Map<string, number>()
   const ways: Way[] = []
+  // Main roads near the haltes, which a bridge for walkers may cross.
+  const roads: number[][] = []
   readOsm(pbfPath, {
     node(id, lat, lon) {
       if (count === ids.length) {
@@ -127,18 +146,57 @@ export function buildWalkFile(pbfPath: string, stops: StopPoints, builtAt: Date)
     },
     way(_id, refs, tags) {
       const use = walkable(tags)
-      if (!use) return
+      const crossable = CROSSED_ROAD.test(tags.get('highway') ?? '') && !yes(tags.get('bridge')) && !yes(tags.get('tunnel'))
+      if (!use && !crossable) return
       const nodes = refs.map(index).filter((i) => i >= 0)
       if (nodes.length < 2 || !nodes.some((i) => isNear(lats[i], lons[i]))) return
+      if (crossable) roads.push(nodes)
+      if (!use) return
       const name = (tags.get('name') ?? '').replace(/\s+/g, ' ').trim()
       let n = -1
       if (name) {
         n = names.get(name) ?? names.size
         names.set(name, n)
       }
-      ways.push({ nodes, name: n, kind: WAY_KINDS.indexOf(use.kind), penalty: use.penalty })
+      const area = tags.get('area') === 'yes' && nodes.length >= 4 && nodes[0] === nodes[nodes.length - 1]
+      ways.push({ nodes, name: n, kind: WAY_KINDS.indexOf(use.kind), penalty: use.penalty, area })
     },
   })
+
+  markFootbridges(ways, roads, lats, lons)
+
+  // A square or plaza mapped as an area is walked across, not only around: points every
+  // SPOKE_GAP_M around it, and spokes from its middle to them.
+  const addNode = (lat: number, lon: number) => {
+    if (count === lats.length) {
+      const grow = (a: Float64Array) => {
+        const b = new Float64Array(a.length * 2)
+        b.set(a)
+        return b
+      }
+      lats = grow(lats)
+      lons = grow(lons)
+    }
+    lats[count] = lat
+    lons[count] = lon
+    return count++
+  }
+  for (const w of ways.filter((x) => x.area)) {
+    const around = [w.nodes[0]]
+    for (let i = 1; i < w.nodes.length; i++) {
+      const [a, b] = [w.nodes[i - 1], w.nodes[i]]
+      const gaps = Math.floor(meters(lats[a], lons[a], lats[b], lons[b]) / SPOKE_GAP_M)
+      for (let k = 1; k < gaps; k++) around.push(addNode(lats[a] + ((lats[b] - lats[a]) * k) / gaps, lons[a] + ((lons[b] - lons[a]) * k) / gaps))
+      around.push(b)
+    }
+    w.nodes = around
+    const ring = around.slice(1)
+    const middle = addNode(ring.reduce((sum, n) => sum + lats[n], 0) / ring.length, ring.reduce((sum, n) => sum + lons[n], 0) / ring.length)
+    const step = Math.ceil(ring.length / MAX_SPOKES)
+    for (let i = 0; i < ring.length; i += step) {
+      ways.push({ nodes: [middle, ring[i]], name: w.name, kind: w.kind, penalty: w.penalty, area: false })
+    }
+  }
 
   // Nodes shared by ways, and way ends, hold the network together and always stay.
   const uses = new Uint8Array(count)
@@ -195,21 +253,79 @@ export function buildWalkFile(pbfPath: string, stops: StopPoints, builtAt: Date)
     transferStart: new Int32Array(stops.id.length + 1),
     transferStop: new Int32Array(0),
     transferMeters: new Int32Array(0),
+    transferSeconds: new Int32Array(0),
   }
 }
 
-const cell = (lat: number, lon: number) =>
-  Math.floor((lat + 90) / NEAR_CELL_DEG) * 100_000 + Math.floor((lon + 180) / NEAR_CELL_DEG)
+/**
+ * Makes the bridges for walkers that cross a main road footbridges (JPO), with
+ * the bridge ways joined to them (ramps, landings): the rest cross a ditch or a
+ * river and stay plain bridges.
+ */
+function markFootbridges(ways: Way[], roads: number[][], lats: Float64Array, lons: Float64Array) {
+  const BRIDGE = WAY_KINDS.indexOf('bridge')
+  const FOOTBRIDGE = WAY_KINDS.indexOf('footbridge')
+  const CELL = 0.002
+  const key = (y: number, x: number) => y * 1_000_000 + x
+  const segments = new Map<number, number[]>()
+  const cellsOf = (a: number, b: number, fn: (key: number) => void) => {
+    for (let y = Math.floor(Math.min(lats[a], lats[b]) / CELL); y <= Math.floor(Math.max(lats[a], lats[b]) / CELL); y++) {
+      for (let x = Math.floor(Math.min(lons[a], lons[b]) / CELL); x <= Math.floor(Math.max(lons[a], lons[b]) / CELL); x++) fn(key(y, x))
+    }
+  }
+  for (const r of roads) {
+    for (let i = 1; i < r.length; i++) {
+      cellsOf(r[i - 1], r[i], (k) => {
+        const list = segments.get(k)
+        if (list) list.push(r[i - 1], r[i])
+        else segments.set(k, [r[i - 1], r[i]])
+      })
+    }
+  }
+  const side = (a: number, b: number, p: number) => Math.sign((lons[b] - lons[a]) * (lats[p] - lats[a]) - (lats[b] - lats[a]) * (lons[p] - lons[a]))
+  // A crossing, not a bridge that ends on the road.
+  const cross = (a: number, b: number, c: number, d: number) =>
+    a !== c && a !== d && b !== c && b !== d && side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0
+  const crossesRoad = (nodes: number[]) => {
+    for (let i = 1; i < nodes.length; i++) {
+      let found = false
+      cellsOf(nodes[i - 1], nodes[i], (k) => {
+        const list = segments.get(k) ?? []
+        for (let j = 0; j < list.length && !found; j += 2) found = cross(nodes[i - 1], nodes[i], list[j], list[j + 1])
+      })
+      if (found) return true
+    }
+    return false
+  }
+  const bridges = ways.filter((w) => w.kind === BRIDGE)
+  const queue = bridges.filter((w) => crossesRoad(w.nodes))
+  for (const w of queue) w.kind = FOOTBRIDGE
+  const byNode = new Map<number, Way[]>()
+  for (const w of bridges) for (const n of w.nodes) byNode.set(n, [...(byNode.get(n) ?? []), w])
+  while (queue.length > 0) {
+    for (const n of queue.pop()!.nodes) {
+      for (const w of byNode.get(n) ?? []) {
+        if (w.kind !== BRIDGE) continue
+        w.kind = FOOTBRIDGE
+        queue.push(w)
+      }
+    }
+  }
+}
 
-/** Grid cells within about NEAR_STOP_DEG of a halte. */
+const cellY = (lat: number) => Math.floor((lat + 90) / NEAR_CELL_DEG)
+const cellX = (lon: number) => Math.floor((lon + 180) / NEAR_CELL_DEG)
+const cell = (lat: number, lon: number) => cellY(lat) * 100_000 + cellX(lon)
+
+/** Grid cells within about NEAR_STOP_DEG of a halte, counted in whole cells so no cell between them is skipped. */
 function nearStopCells(stops: StopPoints): Set<number> {
   const out = new Set<number>()
   const r = Math.ceil(NEAR_STOP_DEG / NEAR_CELL_DEG)
   for (let i = 0; i < stops.lat.length; i++) {
+    const y = cellY(stops.lat[i])
+    const x = cellX(stops.lon[i])
     for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
-        if (dy * dy + dx * dx <= r * r + 1) out.add(cell(stops.lat[i] + dy * NEAR_CELL_DEG, stops.lon[i] + dx * NEAR_CELL_DEG))
-      }
+      for (let dx = -r; dx <= r; dx++) if (dy * dy + dx * dx <= r * r + 1) out.add((y + dy) * 100_000 + x + dx)
     }
   }
   return out
@@ -258,4 +374,9 @@ export function simplify(nodes: number[], fixed: (n: number) => boolean, lats: F
     }
   }
   return nodes.filter((_, i) => keep[i])
+}
+
+function meters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const k = Math.cos(((lat1 + lat2) / 2) * (Math.PI / 180))
+  return Math.hypot((lon2 - lon1) * k * 111_320, (lat2 - lat1) * 111_320)
 }

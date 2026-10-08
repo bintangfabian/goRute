@@ -28,6 +28,8 @@ export default function App() {
   // The leg the map is zoomed to in an option's details; it only counts for the option it was tapped in.
   const [focus, setFocus] = useState<{ leg: number; of: Itinerary } | null>(null)
   const onFocusLeg = useCallback((leg: number | null, of: Itinerary | null) => setFocus(leg === null || !of ? null : { leg, of }), [])
+  // An option's details make the sheet taller or shorter than the list: the camera fits the route again.
+  const [detailOpen, setDetailOpen] = useState(false)
   const sheetRef = useRef<HTMLElement>(null)
 
   const samePlace =
@@ -60,6 +62,7 @@ export default function App() {
           focus={selected && focusLeg !== null ? selected.legs[focusLeg] : null}
           sheet={sheetRef}
           message={message}
+          detail={detailOpen}
         />
       </MapView>
       <BrandBar
@@ -88,6 +91,7 @@ export default function App() {
         onSelect={(id) => ready && setChosen({ plan: ready, id })}
         focusLeg={focusLeg}
         onFocusLeg={onFocusLeg}
+        onDetailChange={setDetailOpen}
       />
     </main>
   )

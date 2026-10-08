@@ -23,6 +23,7 @@ const WAY_WORDS: Record<WalkWay, string> = {
   alley: 'gang',
   pedestrian: 'area pejalan kaki',
   platform: 'peron',
+  bridge: 'jembatan',
 }
 
 const TURNS: Record<Exclude<WalkStep['maneuver'], 'depart'>, string> = {
@@ -47,6 +48,8 @@ export function stepText(step: WalkStep): string {
       return 'Lewat terowongan penyeberangan'
     case 'steps':
       return 'Lewat tangga'
+    case 'bridge':
+      return step.name ? `Lewat ${step.name}` : 'Lewat jembatan'
   }
   // A street by its name; an unnamed alley or sidewalk by what it is; an unnamed road not at all.
   const along = step.name ? ` di ${step.name}` : step.way === 'road' ? '' : ` lewat ${WAY_WORDS[step.way]}`
@@ -74,9 +77,9 @@ export function serviceName(leg: Leg): string {
 }
 
 /** What the rider pays when boarding, in words. */
-export function fareText(leg: Leg, firstRide: boolean): string {
+export function fareText(leg: Leg): string {
   if (leg.fareIdr === null) return 'Tarif belum diketahui'
   if (leg.fareIdr > 0) return `Rp${leg.fareIdr.toLocaleString('id-ID')}`
-  // Free either because the route is (Mikrotrans) or because the first ticket still covers it.
-  return firstRide ? 'Gratis' : 'Rp0, masih tiket sebelumnya'
+  // Free either because the route is (Mikrotrans) or because an earlier ticket still covers it.
+  return leg.fareCovered ? 'Rp0, masih tiket sebelumnya' : 'Gratis'
 }

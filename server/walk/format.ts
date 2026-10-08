@@ -5,7 +5,7 @@
 import { gunzipSync, gzipSync } from 'node:zlib'
 import type { WalkWay } from '../../shared/api.ts'
 
-export const WALK_VERSION = 1
+export const WALK_VERSION = 2
 
 /** Node coordinates are stored in units of 1e-5 degrees, about 1 m. */
 export const COORD_SCALE = 1e5
@@ -22,6 +22,7 @@ export const WAY_KINDS: readonly WalkWay[] = [
   'alley',
   'pedestrian',
   'platform',
+  'bridge',
 ]
 export type WayKind = WalkWay
 
@@ -42,10 +43,12 @@ export type WalkFile = {
   names: string[]
   /** Timetable stop IDs, in timetable order, that the transfers belong to. */
   stopIds: string[]
-  /** Per stop, the stops reachable on foot within the transfer limit, with meters along paths. */
+  /** Per stop, the stops reachable on foot within the transfer limit, with meters and seconds along paths. */
   transferStart: Int32Array
   transferStop: Int32Array
   transferMeters: Int32Array
+  /** Stairs take longer than their meters. */
+  transferSeconds: Int32Array
 }
 
 class Writer {
@@ -98,13 +101,23 @@ class Reader {
     this.buf = buf
   }
 
+  /** Whether every byte has been read: a file cut short or with more after it is broken. */
+  get done(): boolean {
+    return this.pos === this.buf.length
+  }
+
+  private byte(): number {
+    if (this.pos >= this.buf.length) throw new Error('walk.bin: file ends too soon; run pnpm data:build')
+    return this.buf[this.pos++]
+  }
+
   varint(): number {
-    let b = this.buf[this.pos++]
+    let b = this.byte()
     if (b < 0x80) return b
     let v = b & 0x7f
     let scale = 0x80
     do {
-      b = this.buf[this.pos++]
+      b = this.byte()
       v += (b & 0x7f) * scale
       scale *= 0x80
     } while (b >= 0x80)
@@ -118,6 +131,7 @@ class Reader {
 
   string(): string {
     const n = this.varint()
+    if (this.pos + n > this.buf.length) throw new Error('walk.bin: file ends too soon; run pnpm data:build')
     const s = this.text.decode(this.buf.subarray(this.pos, this.pos + n))
     this.pos += n
     return s
@@ -161,6 +175,7 @@ export function encodeWalk(f: WalkFile): Uint8Array {
     for (let i = f.transferStart[s]; i < f.transferStart[s + 1]; i++) {
       w.svarint(f.transferStop[i] - s)
       w.varint(f.transferMeters[i])
+      w.varint(f.transferSeconds[i])
     }
   }
   return gzipSync(w.done(), { level: 9 })
@@ -201,13 +216,19 @@ export function decodeWalk(file: Uint8Array): WalkFile {
   const transferStart = new Int32Array(stopIds.length + 1)
   const transferStop: number[] = []
   const transferMeters: number[] = []
+  const transferSeconds: number[] = []
   for (let s = 0; s < stopIds.length; s++) {
     const n = r.varint()
     for (let i = 0; i < n; i++) {
       transferStop.push(s + r.svarint())
       transferMeters.push(r.varint())
+      transferSeconds.push(r.varint())
     }
     transferStart[s + 1] = transferStop.length
+  }
+  if (!r.done) throw new Error('walk.bin: unexpected data at the end; run pnpm data:build')
+  if (chainNodes.some((n) => n < 0 || n >= nodes) || transferStop.some((t) => t < 0 || t >= stopIds.length)) {
+    throw new Error('walk.bin: broken references; run pnpm data:build')
   }
 
   return {
@@ -224,5 +245,6 @@ export function decodeWalk(file: Uint8Array): WalkFile {
     transferStart,
     transferStop: Int32Array.from(transferStop),
     transferMeters: Int32Array.from(transferMeters),
+    transferSeconds: Int32Array.from(transferSeconds),
   }
 }

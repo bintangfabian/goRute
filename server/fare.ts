@@ -15,6 +15,8 @@ export type Quote = {
   total: number
   /** Paid when boarding each ride; null when unknown. */
   charges: (number | null)[]
+  /** Per ride, whether a ticket bought for an earlier ride still covers it (so it costs nothing). */
+  covered: boolean[]
   /** False when some ride has no fare data, so total is a lower bound. */
   complete: boolean
 }
@@ -25,7 +27,7 @@ export type Quote = {
  * TransJakarta fare covers transfers within three hours.
  */
 export function quoteFares(rides: FareRide[]): Quote {
-  const quote: Quote = { total: 0, charges: [], complete: true }
+  const quote: Quote = { total: 0, charges: [], covered: [], complete: true }
   const tickets = new Map<string, { boughtMs: number; transfersLeft: number }>()
 
   for (const ride of rides) {
@@ -33,17 +35,21 @@ export function quoteFares(rides: FareRide[]): Quote {
     if (!p) {
       quote.complete = false
       quote.charges.push(null)
+      quote.covered.push(false)
       continue
     }
     const ticket = tickets.get(p.id)
     if (ticket && covers(p, ticket, ride.boardMs)) {
       if (ticket.transfersLeft > 0) ticket.transfersLeft--
       quote.charges.push(0)
+      // A free route (Mikrotrans) is free again, not paid for by the earlier ride.
+      quote.covered.push(p.price > 0)
       continue
     }
     const price = priceAt(ride.routeId, p, ride.boardMs)
     tickets.set(p.id, { boughtMs: ride.boardMs, transfersLeft: p.transfers })
     quote.charges.push(price)
+    quote.covered.push(false)
     quote.total += price
   }
   return quote

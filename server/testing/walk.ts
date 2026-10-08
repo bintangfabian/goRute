@@ -48,5 +48,6 @@ export function testWalkFile(streets: Street[], stopIds: string[] = []): WalkFil
     transferStart: new Int32Array(stopIds.length + 1),
     transferStop: new Int32Array(0),
     transferMeters: new Int32Array(0),
+    transferSeconds: new Int32Array(0),
   }
 }

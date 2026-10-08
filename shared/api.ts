@@ -50,9 +50,11 @@ export type Leg = {
   route: Route | null
   /** Paid when boarding this leg: 0 when an earlier ticket covers it, null for walking or unknown fares. */
   fareIdr: number | null
+  /** Rides: true when fareIdr is 0 because a ticket bought earlier on the trip still covers this ride. */
+  fareCovered?: boolean
   /** [lon, lat] pairs; a walk follows the streets when the server has the path network. */
   geometry: [number, number][]
-  /** Rides: where the bus is headed, from GTFS trip_headsign (may be empty). */
+  /** Rides: where the bus is headed, the last halte of its trip (may be empty). */
   headsign?: string
   /** Rides: the stops passed between boarding and alighting, in order. */
   stops?: Place[]
@@ -72,6 +74,7 @@ export type WalkWay =
   | 'alley'
   | 'pedestrian'
   | 'platform'
+  | 'bridge'
 
 export type WalkStep = {
   /** How the step starts: depart for the first, otherwise the turn from the previous one. */

@@ -29,17 +29,19 @@ test('calls out crossings, footbridges, underpasses and stairs whatever the turn
   assert.equal(stepText(step({ way: 'footbridge', maneuver: 'right' })), 'Naik jembatan penyeberangan (JPO)')
   assert.equal(stepText(step({ way: 'underpass' })), 'Lewat terowongan penyeberangan')
   assert.equal(stepText(step({ way: 'steps' })), 'Lewat tangga')
+  assert.equal(stepText(step({ way: 'bridge' })), 'Lewat jembatan')
 })
 
 test('names the service and the fare to pay', () => {
-  const ride = (category: string, fareIdr: number | null) =>
-    ({ route: { category, agency: 'TransJakarta' }, fareIdr }) as unknown as Leg
+  const ride = (category: string, fareIdr: number | null, fareCovered?: boolean) =>
+    ({ route: { category, agency: 'TransJakarta' }, fareIdr, fareCovered }) as unknown as Leg
   assert.equal(serviceName(ride('BRT', 3500)), 'TransJakarta BRT')
   assert.equal(serviceName(ride('Angkutan Umum Integrasi', 3500)), 'TransJakarta Non-BRT')
   assert.equal(serviceName(ride('Mikrotrans', 0)), 'Mikrotrans')
   assert.equal(serviceName(ride('Bus Baru', 0)), 'Bus Baru')
-  assert.equal(fareText(ride('BRT', 3500), true), 'Rp3.500')
-  assert.equal(fareText(ride('Mikrotrans', 0), true), 'Gratis')
-  assert.equal(fareText(ride('BRT', 0), false), 'Rp0, masih tiket sebelumnya')
-  assert.equal(fareText(ride('KRL', null), true), 'Tarif belum diketahui')
+  assert.equal(fareText(ride('BRT', 3500)), 'Rp3.500')
+  // A Mikrotrans is free wherever it comes in the trip; a transfer the first ticket covers is not.
+  assert.equal(fareText(ride('Mikrotrans', 0)), 'Gratis')
+  assert.equal(fareText(ride('BRT', 0, true)), 'Rp0, masih tiket sebelumnya')
+  assert.equal(fareText(ride('KRL', null)), 'Tarif belum diketahui')
 })

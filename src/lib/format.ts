@@ -30,6 +30,8 @@ export function formatRupiah(amount: number) {
   return amount === 0 ? 'Gratis' : `Rp${amount.toLocaleString('id-ID')}`
 }
 
+/** Tens of meters, a few single meters when that is all ("3 m" of stairs, not "0 m"), kilometers past 1 km. */
 export function formatDistance(m: number) {
+  if (m < 10) return `${Math.max(1, Math.round(m))} m`
   return m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} km`
 }
