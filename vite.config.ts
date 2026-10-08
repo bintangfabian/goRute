@@ -15,6 +15,9 @@ const vercel = JSON.parse(readFileSync(new URL('./vercel.json', import.meta.url)
 const productionHeaders: Record<string, string> = Object.fromEntries(
   vercel.headers.find((h) => h.source === '/(.*)')!.headers.map((h) => [h.key, h.value]),
 )
+// The service worker keeps index.html with the headers it was fetched with, the CSP among
+// them. Its revision follows the headers too, so a change to them alone reaches installed apps.
+const headersRevision = createHash('sha256').update(JSON.stringify(vercel.headers)).digest('hex').slice(0, 10)
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -48,6 +51,12 @@ export default defineConfig({
         // maplibre-gl alone is larger than workbox's 2 MiB default.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallbackDenylist: [/^\/api\//],
+        manifestTransforms: [
+          async (entries) => ({
+            manifest: entries.map((e) => (e.url === 'index.html' ? { ...e, revision: `${e.revision}-${headersRevision}` } : e)),
+            warnings: [],
+          }),
+        ],
         // Patterns are RegExps, not functions: workbox copies them into sw.js, where no outer constant exists.
         runtimeCaching: [
           {
