@@ -133,7 +133,7 @@ export function RouteDetail(props: Props) {
           onClick={props.onBack}
           whileTap={{ scale: 0.92 }}
           aria-label="Kembali ke pilihan rute"
-          className="-ml-2.5 grid size-10 shrink-0 place-items-center rounded-full text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
+          className="-mt-0.5 -ml-3 grid size-11 shrink-0 place-items-center rounded-full text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
         >
           <ArrowLeftIcon className="size-5" />
         </motion.button>
@@ -145,7 +145,7 @@ export function RouteDetail(props: Props) {
             <p className="text-xl font-bold tracking-tight">{formatDuration(it.durationSec)}</p>
             <p className="text-lg font-bold">
               {formatRupiah(it.fare.totalIdr)}
-              {!it.fare.complete && <span className="text-slate-400">+</span>}
+              {!it.fare.complete && <span className="text-slate-500">+</span>}
             </p>
           </div>
           <p className="truncate text-xs text-slate-500 tabular-nums">
@@ -379,8 +379,10 @@ function RideRow({ leg, focused, onFocus }: { leg: Leg; focused: boolean; onFocu
           <span className="text-sm font-semibold text-slate-800">{serviceName(leg)}</span>
         </span>
         {leg.headsign && <span className="mt-1 block text-sm text-slate-700">Arah {leg.headsign}</span>}
+        {/* How many haltes it passes is on the toggle below; with none, getting off at the next one is the news. */}
         <span className="mt-0.5 block text-xs text-slate-500">
-          {passed.length + 1} halte · {formatDuration(leg.durationSec)}
+          {passed.length === 0 && <>Turun di halte berikutnya · </>}
+          {formatDuration(leg.durationSec)}
           {route.longName && <> · {route.longName}</>}
         </span>
         <span className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-600">
@@ -431,8 +433,12 @@ function LegHeader(props: { focused: boolean; onFocus: () => void; children: Rea
       type="button"
       onClick={props.onFocus}
       aria-pressed={props.focused}
-      className={`-mx-2 block w-[calc(100%+1rem)] rounded-xl px-2 py-1.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none ${
-        props.focused ? 'bg-brand-soft/50' : 'hover:bg-slate-50'
+      // Shown on the map: a lighter tint than a card's, so the grey small print keeps its contrast, and
+      // a bar in the brand colour that says so more than the tint does.
+      className={`relative -mx-2 block w-[calc(100%+1rem)] rounded-xl px-2 py-1.5 text-left transition-colors focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none ${
+        props.focused
+          ? 'bg-brand-soft/35 before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-full before:bg-brand'
+          : 'hover:bg-slate-50'
       }`}
     >
       {props.children}
@@ -453,7 +459,8 @@ function Toggle(props: { open: boolean; onToggle: () => void; controls: string; 
       onClick={props.onToggle}
       aria-expanded={props.open}
       aria-controls={props.controls}
-      className="mt-1 flex items-center gap-1 rounded-full py-1 text-xs font-semibold text-brand focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
+      // 24 px to see, 44 px to hit.
+      className="relative mt-1 flex items-center gap-1 rounded-full py-1 text-xs font-semibold text-brand after:absolute after:-inset-x-2 after:-inset-y-2.5 focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
     >
       {props.children}
       <motion.span animate={{ rotate: props.open ? 180 : 0 }} transition={{ duration: 0.2 }}>

@@ -96,7 +96,7 @@ function ItineraryCard(props: {
         <div className="text-right">
           <p className="text-base font-bold">
             {formatRupiah(it.fare.totalIdr)}
-            {!it.fare.complete && <span className="text-slate-400">+</span>}
+            {!it.fare.complete && <span className="text-slate-500">+</span>}
           </p>
           <p className="text-xs text-slate-500">
             {it.transfers === 0 ? 'Tanpa transit' : `${it.transfers}× transit`} · jalan {formatDistance(it.walkDistanceM)}
@@ -139,9 +139,10 @@ function LegStrip({ legs }: { legs: Leg[] }) {
 function LegChip({ leg }: { leg: Leg }) {
   if (!leg.route) {
     return (
-      <span className="flex items-center gap-0.5 text-xs text-slate-500">
+      // With its unit: a bare "1" next to corridor 1's badge would read as a route.
+      <span className="flex items-center gap-0.5 text-xs whitespace-nowrap text-slate-500">
         <WalkIcon className="size-4" />
-        {Math.round(leg.durationSec / 60)}
+        {formatDuration(leg.durationSec)}
       </span>
     )
   }

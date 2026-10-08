@@ -6,14 +6,16 @@ const clock = new Intl.DateTimeFormat('id-ID', {
 
 const weekday = new Intl.DateTimeFormat('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' })
 
-const DAY_WORDS: Record<number, string> = { [-1]: 'kemarin', 0: '', 1: 'besok', 2: 'lusa' }
+// Two days on is named by its weekday: "Senin" reads the same on the button that picks it, in
+// the picker and on the cards, where "lusa" would be a third word for the same day.
+const DAY_WORDS: Record<number, string> = { [-1]: 'kemarin', 0: '', 1: 'besok' }
 
 export const formatClock = (iso: string) => clock.format(new Date(iso))
 
 /** The WIB weekday of `ms`, e.g. "Sabtu". */
 export const formatWeekday = (ms: number) => weekday.format(ms)
 
-/** The day of `ms`, `days` days after today: '' (today), kemarin, besok, lusa, or the weekday. */
+/** The day of `ms`, `days` days after today: '' (today), kemarin, besok, or the weekday. */
 export function formatDay(ms: number, days: number) {
   return DAY_WORDS[days] ?? weekday.format(ms)
 }
@@ -23,7 +25,7 @@ export function formatDuration(sec: number) {
   if (min < 60) return `${min} mnt`
   const h = Math.floor(min / 60)
   const m = min % 60
-  return m === 0 ? `${h} jam` : `${h} j ${m} mnt`
+  return m === 0 ? `${h} jam` : `${h} jam ${m} mnt`
 }
 
 export function formatRupiah(amount: number) {
