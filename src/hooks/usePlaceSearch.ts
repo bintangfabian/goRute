@@ -69,7 +69,12 @@ export function usePlaceSearch(query: string, near: { lat: number; lon: number }
  */
 function merge(stops: PlaceResult[], places: PlaceResult[]): PlaceResult[] {
   // Only a platform digit is dropped: "Monas 1" is the halte Monas, "SMAN 73" is not SMAN 85.
-  const base = (p: PlaceResult) => p.name.toLowerCase().replace(/\s+[1-9]$/, '')
+  // The geocoder calls a halte "Halte Monas".
+  const base = (p: PlaceResult) =>
+    p.name
+      .toLowerCase()
+      .replace(/^halte\s+/, '')
+      .replace(/\s+[1-9]$/, '')
   const near = (a: PlaceResult, b: PlaceResult) => Math.abs(a.lat - b.lat) < SAME_HALTE_DEG && Math.abs(a.lon - b.lon) < SAME_HALTE_DEG
   return [...stops, ...places.filter((p) => !stops.some((s) => base(s) === base(p) && near(s, p)))]
 }
