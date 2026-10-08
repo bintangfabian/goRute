@@ -12,8 +12,18 @@ export type PlaceSearch = {
   error: string | null
 }
 
-// Haltes and places come from two endpoints; each joins the list when it arrives.
-type Answers = { q: string; stops: PlaceResult[] | null; places: PlaceResult[] | null; error: string | null }
+// Haltes and places come from two endpoints; each joins the list when it arrives. When our
+// index finds little (`more`), the public geocoder is asked as well, and its places follow.
+type Answers = {
+  q: string
+  stops: PlaceResult[] | null
+  places: PlaceResult[] | null
+  more: boolean
+  /** The geocoder's places; null while asked and not answered yet. */
+  geocoded: PlaceResult[] | null
+  error: string | null
+}
+const NOTHING: Omit<Answers, 'q'> = { stops: null, places: null, more: false, geocoded: null, error: null }
 
 /** `near` is the other end of the trip, if chosen: places near it come first. */
 export function usePlaceSearch(query: string, near: { lat: number; lon: number } | null = null): PlaceSearch {
@@ -22,13 +32,14 @@ export function usePlaceSearch(query: string, near: { lat: number; lon: number }
   // A string, so a new object for the same spot does not search again.
   const nearKey = near ? `${near.lat.toFixed(2)},${near.lon.toFixed(2)}` : null
   // Results stay visible while the next query loads, so the list does not flicker.
-  const [answers, setAnswers] = useState<Answers>({ q: '', stops: [], places: [], error: null })
+  const [answers, setAnswers] = useState<Answers>({ ...NOTHING, q: '', stops: [], places: [] })
 
   useEffect(() => {
     if (!active) return
     const controller = new AbortController()
     const settle = (update: Partial<Answers>) =>
-      setAnswers((prev) => ({ ...(prev.q === q ? prev : { q, stops: null, places: null, error: null }), ...update }))
+      setAnswers((prev) => ({ ...(prev.q === q ? prev : { ...NOTHING, q }), ...update }))
+    const where = nearKey ? { lat: Number(nearKey.split(',')[0]), lon: Number(nearKey.split(',')[1]) } : null
     const stopsTimer = setTimeout(() => {
       api
         .stops(q, controller.signal)
@@ -39,8 +50,18 @@ export function usePlaceSearch(query: string, near: { lat: number; lon: number }
     }, DEBOUNCE_MS)
     const placesTimer = setTimeout(() => {
       api
-        .places(q, nearKey ? { lat: Number(nearKey.split(',')[0]), lon: Number(nearKey.split(',')[1]) } : null, controller.signal)
-        .then(({ data, error }) => settle({ places: data?.places ?? [], error: error ?? null }))
+        .places(q, where, controller.signal)
+        .then(({ data, error }) => {
+          settle({ places: data?.places ?? [], more: data?.more ?? false, error: error ?? null })
+          if (!data?.more) return
+          // The geocoder is slow; its places join the list when they come, after ours.
+          api
+            .geocode(q, where, controller.signal)
+            .then(({ data: found }) => settle({ geocoded: found?.places ?? [] }))
+            .catch(() => {
+              if (!controller.signal.aborted) settle({ geocoded: [] })
+            })
+        })
         .catch(() => {
           if (!controller.signal.aborted) settle({ places: [], error: 'Server tidak bisa dihubungi.' })
         })
@@ -56,10 +77,20 @@ export function usePlaceSearch(query: string, near: { lat: number; lon: number }
   // Older results only stand in while the rider keeps typing the same word ("mon" → "monas");
   // after a different query they would be suggestions for something else.
   const usable = answers.q === q || q.toLowerCase().startsWith(answers.q.toLowerCase())
-  const places = usable ? merge(answers.stops ?? [], answers.places ?? []).slice(0, MAX_SHOWN) : []
-  const loading = answers.q !== q || answers.stops === null || answers.places === null
+  const found = [...(answers.places ?? []), ...geocodedOnly(answers.places ?? [], answers.geocoded ?? [])]
+  const places = usable ? merge(answers.stops ?? [], found).slice(0, MAX_SHOWN) : []
+  // Still looking while nothing is listed and the geocoder may yet find something.
+  const loading =
+    answers.q !== q || answers.stops === null || answers.places === null || (answers.more && answers.geocoded === null && places.length === 0)
   // A failed place search only matters when the haltes found nothing either.
   return { places, loading, error: !loading && places.length === 0 ? answers.error : null }
+}
+
+/** The geocoder's places that are not one of ours again (same name, within ~200 m). */
+function geocodedOnly(ours: PlaceResult[], theirs: PlaceResult[]): PlaceResult[] {
+  const same = (a: PlaceResult, b: PlaceResult) =>
+    a.name.toLowerCase() === b.name.toLowerCase() && Math.abs(a.lat - b.lat) < 0.002 && Math.abs(a.lon - b.lon) < 0.002
+  return theirs.filter((p) => !ours.some((o) => same(o, p)))
 }
 
 /**

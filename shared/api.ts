@@ -110,4 +110,11 @@ export type PlaceResult = Place & {
   category?: string
 }
 
+/** GET /api/v1/places and /api/v1/geocode. */
+export type PlacesAnswer = {
+  places: PlaceResult[]
+  /** /places only: our index found little, and the public geocoder (/api/v1/geocode) may add places. */
+  more?: boolean
+}
+
 export type ApiError = { error: string }

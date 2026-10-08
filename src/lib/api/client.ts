@@ -1,4 +1,4 @@
-import type { ApiError, Plan, PlaceResult, Status } from '../../../shared/api.ts'
+import type { ApiError, Plan, PlaceResult, PlacesAnswer, Status } from '../../../shared/api.ts'
 
 export type { Itinerary, Leg, Plan, PlaceResult, Status, WalkStep } from '../../../shared/api.ts'
 
@@ -32,10 +32,9 @@ export const api = {
   plan: (query: PlanQuery, signal?: AbortSignal) => get<Plan>('/api/v1/plan', query, signal),
   /** `near` (the other end of the trip) puts nearby places first; rounded so the CDN can share answers. */
   places: (q: string, near: { lat: number; lon: number } | null, signal?: AbortSignal) =>
-    get<{ places: PlaceResult[] }>(
-      '/api/v1/places',
-      near ? { q, lat: near.lat.toFixed(2), lon: near.lon.toFixed(2) } : { q },
-      signal,
-    ),
+    get<PlacesAnswer>('/api/v1/places', near ? { q, lat: near.lat.toFixed(2), lon: near.lon.toFixed(2) } : { q }, signal),
+  /** The public geocoder, slower: asked when /places says it may find `more`. */
+  geocode: (q: string, near: { lat: number; lon: number } | null, signal?: AbortSignal) =>
+    get<PlacesAnswer>('/api/v1/geocode', near ? { q, lat: near.lat.toFixed(2), lon: near.lon.toFixed(2) } : { q }, signal),
   stops: (q: string, signal?: AbortSignal) => get<{ places: PlaceResult[] }>('/api/v1/stops', { q }, signal),
 }
