@@ -120,6 +120,30 @@ export const ArrowLeftIcon = (p: IconProps) => (
   </Icon>
 )
 
+export const ArrowRightIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 12h14" />
+    <path d="m13 6 6 6-6 6" />
+  </Icon>
+)
+
+/** A place picked before: a clock turning back. */
+export const HistoryIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="8" {...tint} stroke="none" />
+    <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3L4.5 9" />
+    <path d="M4.5 4.5V9H9" />
+    <path d="M12 8.5V12l2.5 1.5" />
+  </Icon>
+)
+
+export const TrashIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M6.5 7.5h11l-.9 11.6a1.5 1.5 0 0 1-1.5 1.4H8.9a1.5 1.5 0 0 1-1.5-1.4Z" {...tint} />
+    <path d="M4.5 7.5h15M10 4.5h4M10 11v5.5M14 11v5.5" />
+  </Icon>
+)
+
 export const ChevronDownIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="m6 9 6 6 6-6" />

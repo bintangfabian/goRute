@@ -40,8 +40,13 @@ export default function App() {
   const plan = usePlan(origin, samePlace ? null : destination, pickedTime, attempt)
 
   const ready = plan.kind === 'ready' ? plan.plan : null
-  const selectedId = ready ? (chosen?.plan === ready ? chosen.id : (ready.ranking[preference][0] ?? null)) : null
+  const pickedIn = (p: Plan) => (chosen?.plan === p ? chosen.id : (p.ranking[preference][0] ?? null))
+  const selectedId = ready ? pickedIn(ready) : null
   const selected = ready?.itineraries.find((it) => it.id === selectedId) ?? null
+  // While the same trip is planned again (another time, a retry), the map keeps the last
+  // route, rather than wiping it and moving the camera twice.
+  const last = plan.kind === 'loading' ? plan.last : null
+  const onMap = selected ?? last?.itineraries.find((it) => it.id === pickedIn(last)) ?? null
   const message = samePlace || plan.kind === 'error' || ready?.itineraries.length === 0
   const focusLeg = focus && focus.of === selected ? focus.leg : null
   const clearToast = useCallback(() => setToast(null), [])
@@ -53,12 +58,12 @@ export default function App() {
         onPick={(point) => (destination && !origin ? setOrigin(point) : setDestination(point))}
         onOutside={() => setToast({ id: Date.now(), text: 'Titik itu di luar area layanan Jabodetabek.' })}
       >
-        {selected && <RouteLine itinerary={selected} focus={focusLeg} />}
+        {onMap && <RouteLine itinerary={onMap} focus={focusLeg} />}
         <EndpointMarkers origin={origin} destination={destination} />
         <CameraFollow
           origin={origin}
           destination={destination}
-          itinerary={selected}
+          itinerary={onMap}
           focus={selected && focusLeg !== null ? selected.legs[focusLeg] : null}
           sheet={sheetRef}
           message={message}
