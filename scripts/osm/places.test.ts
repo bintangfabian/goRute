@@ -215,8 +215,9 @@ test('keeps train stations, leaves haltes to the halte search, and drops what is
           // A train station with a bus terminal of the same name next to it, as at Manggarai.
           { id: 1, lat: -6.21, lon: 106.85, tags: { name: 'Manggarai', railway: 'station', public_transport: 'station', train: 'yes' } },
           { id: 2, lat: -6.2125, lon: 106.85, tags: { name: 'Manggarai', amenity: 'bus_station' } },
-          // A BRT halte mapped as a station, on a halte of the timetable.
+          // A BRT halte mapped as a station, on a halte of the timetable, and its shelter as a building.
           { id: 3, lat: -6.18, lon: 106.82, tags: { name: 'Monumen Nasional', amenity: 'bus_station', public_transport: 'station', bus: 'yes' } },
+          { id: 7, lat: -6.1802, lon: 106.8202, tags: { name: 'Halte Monumen Nasional', building: 'yes' } },
           // A closed train station, and a station far outside Jabodetabek.
           { id: 4, lat: -6.2, lon: 106.82, tags: { name: 'Karet', public_transport: 'station', 'disused:railway': 'station' } },
           { id: 5, lat: -8.2, lon: 114.37, tags: { name: 'Banyuwangi', railway: 'station' } },

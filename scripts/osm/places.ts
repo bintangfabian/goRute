@@ -361,15 +361,16 @@ export function buildPlacesFile(pbfPath: string, builtAt: Date, haltes: { lat: n
     }
   }
 
-  // Bus stations on a halte are that halte, which the halte search finds with its routes.
+  // Bus stations on a halte, and the shelters mapped as buildings named after it ("Halte
+  // Monumen Nasional"), are that halte, which the halte search finds with its routes.
   const halteGrid = new Map<string, number[]>()
   const halteCell = (lat: number, lon: number) => `${Math.floor(lat / 0.002)},${Math.floor(lon / 0.002)}`
   haltes.lat.forEach((lat, i) => {
     const c = halteCell(lat, haltes.lon[i])
     halteGrid.set(c, [...(halteGrid.get(c) ?? []), i])
   })
-  const busOnHalte = (p: Candidate) => {
-    if (p.kind.label !== 'Terminal bus') return false
+  const isHalte = (p: Candidate) => {
+    if (p.kind.label !== 'Terminal bus' && (p.kind.label === 'Stasiun' || !/^halte\b/i.test(p.name))) return false
     const [cy, cx] = halteCell(p.lat, p.lon).split(',').map(Number)
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
@@ -387,7 +388,7 @@ export function buildPlacesFile(pbfPath: string, builtAt: Date, haltes: { lat: n
   const cell = (lat: number, lon: number) => `${Math.floor(lat / 0.005)},${Math.floor(lon / 0.005)}`
   const kept: Candidate[] = []
   for (const p of places) {
-    if (!inServiceArea(p.lat, p.lon) || busOnHalte(p)) continue
+    if (!inServiceArea(p.lat, p.lon) || isHalte(p)) continue
     const key = sameKey(p)
     // Big places (a station, a mall) have entrances and outlines far from their middle.
     const within = p.kind.weight >= 3 ? SAME_PLACE_M * 3 : SAME_PLACE_M
