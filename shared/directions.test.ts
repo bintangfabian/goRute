@@ -39,6 +39,9 @@ test('names the service and the fare to pay', () => {
   assert.equal(serviceName(ride('Angkutan Umum Integrasi', 3500)), 'TransJakarta Non-BRT')
   assert.equal(serviceName(ride('Mikrotrans', 0)), 'Mikrotrans')
   assert.equal(serviceName(ride('Bus Baru', 0)), 'Bus Baru')
+  // Without a category, the agency as it writes its own name, not as the GTFS feed spells it.
+  const uncategorized = { route: { category: '', agency: 'Transjakarta' }, fareIdr: 3500 } as unknown as Leg
+  assert.equal(serviceName(uncategorized), 'TransJakarta')
   assert.equal(fareText(ride('BRT', 3500)), 'Rp3.500')
   // A Mikrotrans is free wherever it comes in the trip; a transfer the first ticket covers is not.
   assert.equal(fareText(ride('Mikrotrans', 0)), 'Gratis')

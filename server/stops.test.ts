@@ -124,6 +124,6 @@ test('hints at a nearby halte, a BRT one when it is close', () => {
 test('describes a halte by the routes stopping there', () => {
   const [halte] = searchStops(tt, 'monumen nasional')
   assert.equal(halte.kind, 'stop')
-  assert.equal(halte.address, 'Halte Transjakarta · 1, 2')
+  assert.equal(halte.address, 'Halte TransJakarta · 1, 2')
   assert.deepEqual([halte.lat, halte.lon], [-6.176, 106.823])
 })

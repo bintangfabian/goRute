@@ -70,10 +70,15 @@ const SERVICES: Record<string, string> = {
   'Bus Wisata': 'Bus Wisata',
 }
 
+/** Agencies as they write their own names; the GTFS feed says "Transjakarta". */
+const AGENCY_NAMES: Record<string, string> = { Transjakarta: 'TransJakarta' }
+
+export const agencyName = (agency: string) => AGENCY_NAMES[agency] ?? agency
+
 /** "TransJakarta BRT" for a corridor bus, "Mikrotrans" for a minibus. */
 export function serviceName(leg: Leg): string {
   const category = leg.route?.category ?? ''
-  return SERVICES[category] ?? (category || leg.route?.agency || 'Bus')
+  return SERVICES[category] ?? (category || agencyName(leg.route?.agency ?? '') || 'Bus')
 }
 
 /** What the rider pays when boarding, in words. */
