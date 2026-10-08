@@ -1,6 +1,7 @@
 import { motion } from 'motion/react'
 import { Marker } from 'react-map-gl/maplibre'
 import type { Endpoint } from '../../lib/trip'
+import { FlagIcon } from '../icons'
 
 const pop = {
   initial: { scale: 0, y: -12 },
@@ -16,17 +17,17 @@ export function EndpointMarkers({ origin, destination }: { origin: Endpoint | nu
           <motion.div {...pop} className="size-5 rounded-full border-4 border-white bg-brand shadow-lg" />
         </Marker>
       )}
+      {/* The trip's end as the details draw it, a flag on the accent colour. Centred on the spot
+          rather than a pin standing over it, so the halte the rider gets off at, often just
+          north of the destination, is not hidden under it. */}
       {destination && (
-        <Marker
-          key={`d${destination.lat},${destination.lon}`}
-          longitude={destination.lon}
-          latitude={destination.lat}
-          anchor="bottom"
-        >
-          <motion.svg {...pop} viewBox="0 0 32 40" className="h-10 w-8 origin-bottom drop-shadow-lg">
-            <path d="M16 39s13-12.4 13-23A13 13 0 0 0 3 16c0 10.6 13 23 13 23Z" fill="#fbbf24" stroke="#fff" strokeWidth="2.5" />
-            <circle cx="16" cy="16" r="5" fill="#fff" />
-          </motion.svg>
+        <Marker key={`d${destination.lat},${destination.lon}`} longitude={destination.lon} latitude={destination.lat} anchor="center">
+          <motion.div
+            {...pop}
+            className="grid size-7 place-items-center rounded-full border-[3px] border-white bg-accent text-slate-900 shadow-lg"
+          >
+            <FlagIcon className="size-3.5" />
+          </motion.div>
         </Marker>
       )}
     </>

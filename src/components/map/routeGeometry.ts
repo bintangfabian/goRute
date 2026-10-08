@@ -64,8 +64,9 @@ export function routeAt(
       geometry: { type: 'LineString', coordinates: coords },
     })
     if (transit) {
-      features.push(stop(m.coords[0], color, dim))
-      if (reached >= m.start + m.length) features.push(stop(m.coords[m.coords.length - 1], color, dim))
+      // A halte stays lit when the focused leg is the walk to or from it.
+      features.push(stop(m.coords[0], color, dim && focus !== i - 1))
+      if (reached >= m.start + m.length) features.push(stop(m.coords[m.coords.length - 1], color, dim && focus !== i + 1))
     }
   })
   return { type: 'FeatureCollection', features }
@@ -73,6 +74,18 @@ export function routeAt(
 
 function stop(coord: Coord, color: string, dim: boolean): Feature<Point, RouteFeatureProps> {
   return { type: 'Feature', properties: { kind: 'stop', color, dim }, geometry: { type: 'Point', coordinates: coord } }
+}
+
+/**
+ * A fingerprint of the route's line: a new answer drawing the same one (another time, the
+ * same buses) is not animated again.
+ */
+export function shapeOf(legs: Leg[]): string {
+  let hash = 0
+  for (const leg of legs) {
+    for (const [lon, lat] of leg.geometry as Coord[]) hash = (Math.imul(hash, 31) + Math.round(lon * 1e5) * 7 + Math.round(lat * 1e5)) | 0
+  }
+  return `${legs.length}:${hash}`
 }
 
 export function routeBounds(legs: Leg[]): [[number, number], [number, number]] | null {

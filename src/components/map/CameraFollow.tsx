@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useEffectEvent, useRef, type RefObject } from 'react'
 import { useMap, type MapRef } from 'react-map-gl/maplibre'
 import type { Itinerary, Leg } from '../../lib/api/client'
 import type { Endpoint } from '../../lib/trip'
@@ -19,6 +19,8 @@ type Props = {
 }
 
 const MONAS: [number, number] = [106.8272, -6.1754]
+/** A window being dragged to a new size fires resize on every frame: the camera waits for it to rest. */
+const RESIZE_SETTLE_MS = 250
 
 // Moves the camera to whatever the user is looking at: the selected
 // route, otherwise the chosen endpoints, otherwise central Jakarta.
@@ -44,6 +46,25 @@ export function CameraFollow({ origin, destination, itinerary, focus, sheet, mes
     // message and detail are not read above: they change the panel's height, so the camera fits again.
   }, [map, origin, destination, itinerary, focus, sheet, message, detail])
 
+  // A resized window or a turned phone changes what the panel covers (on a wide window it
+  // moves to the side): the camera fits what is shown again.
+  const refit = useEffectEvent(() => {
+    if (map) follow(map, sheet.current, [origin, destination], itinerary, focus, false)
+  })
+  useEffect(() => {
+    if (!map) return
+    let timer = 0
+    const onResize = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(refit, RESIZE_SETTLE_MS)
+    }
+    map.on('resize', onResize)
+    return () => {
+      map.off('resize', onResize)
+      window.clearTimeout(timer)
+    }
+  }, [map])
+
   return null
 }
 
@@ -61,7 +82,7 @@ function follow(
   // not screen rects, so the panel sliding in on load does not skew them.
   const view = map.getContainer()
   // On wide screens the panel stands on the left; on phones it covers the bottom
-  // and the brand bar floats on top, so the 40 px destination pin needs room below it.
+  // and the brand bar floats on top, with the endpoint markers needing room below it.
   // Either way, keep at least a strip of map visible.
   const side = !!panel && panel.offsetHeight > view.clientHeight * 0.6 && panel.offsetWidth < view.clientWidth * 0.5
   const padding = { top: side ? 64 : 104, left: 48, right: 48, bottom: 48 }
